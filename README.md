@@ -33,6 +33,11 @@ Xây dựng hệ thống nhắn tin, gởi nhận, chia sẻ dữ liệu trên n
     + SELECT * FROM messages;
     + SELECT * FROM users;
 
+    <!-- xem các trường của table -->
+    + DESCRIBE users;
+    + DESC users;
+
+
     <!-- tạo firebase nhatduy096@gmail.com -->
     link: https://cloudifyshare-default-rtdb.asia-southeast1.firebasedatabase.app/
     

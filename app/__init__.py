@@ -6,12 +6,14 @@ from flask_migrate import Migrate
 from flask_cors import CORS
 import cloudinary
 import firebase_admin
-from firebase_admin import credentials, db
+from firebase_admin import credentials, db as firebase_db 
+from flask_jwt_extended import JWTManager
 
 load_dotenv()
 
 db = SQLAlchemy()
 migrate = Migrate()
+jwt = JWTManager()
 
 def create_app():
     app = Flask(__name__)
@@ -19,6 +21,7 @@ def create_app():
     app.config.from_object("app.config.Config")
     
     db.init_app(app)
+    jwt.init_app(app)
     migrate.init_app(app, db)
     
     cloudinary.config(
@@ -41,6 +44,8 @@ def create_app():
     except Exception as e:
         print("Firebase init error:", e)
     
+    from app.routes.auth_routes import auth
+    app.register_blueprint(auth, url_prefix="/auth")
     
     from app import models
     return app
