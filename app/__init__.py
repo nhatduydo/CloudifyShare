@@ -45,7 +45,10 @@ def create_app():
         print("Firebase init error:", e)
     
     from app.routes.auth_routes import auth
+    from app.routes.message_routes import messsage
     app.register_blueprint(auth, url_prefix="/auth")
+    app.register_blueprint(messsage, url_prefix="/messages")
+    
     
     from app import models
     return app
