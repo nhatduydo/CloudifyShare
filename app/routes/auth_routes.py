@@ -6,6 +6,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from app import db
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required
 import cloudinary.uploader
+from flask import current_app
 
 auth = Blueprint("auth", __name__)
 
@@ -24,10 +25,11 @@ def login():
         return jsonify({"error": "Sai username hoặc password"}), 401
 
     access_token = create_access_token(identity=username)
-
+    expires_in = int(current_app.config["JWT_ACCESS_TOKEN_EXPIRES"].total_seconds())
     return jsonify({
         "message": "Đăng nhập thành công",
         "access_token": "Bearer " + access_token,
+        "expires_in": expires_in,
         "user": {
             "id": user.id,
             "username": user.username,

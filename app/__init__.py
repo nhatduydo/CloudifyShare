@@ -46,8 +46,10 @@ def create_app():
     
     from app.routes.auth_routes import auth
     from app.routes.message_routes import messsage
+    from app.routes.file_routes import file
     app.register_blueprint(auth, url_prefix="/auth")
     app.register_blueprint(messsage, url_prefix="/messages")
+    app.register_blueprint(file, url_prefix="/files")
     
     
     from app import models

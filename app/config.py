@@ -1,6 +1,5 @@
 import os
-import cloudinary
-
+from datetime import timedelta
 
 class Config:
     # Flask
@@ -24,3 +23,7 @@ class Config:
         "FIREBASE_DATABASE_URL",
         "https://cloudifyshare-default-rtdb.asia-southeast1.firebasedatabase.app/"
     )
+    
+    # JWT 
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "super-jwt-secret")
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES", 36000)))
