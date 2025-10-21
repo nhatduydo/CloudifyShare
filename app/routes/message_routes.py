@@ -169,3 +169,47 @@ def get_chat_list():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# api tìm kiếm user theo username hoặc full_name hoặc id
+@messsage.route("/search", methods=["GET"])
+@jwt_required()
+def search_user():
+    try:
+        current_username = get_jwt_identity()
+        keyword = request.args.get("q", "").strip()
+        
+        if not keyword:
+            return jsonify({"error": "Thiếu keyword"}), 400
+        
+        query = User.query.filter(User.username != current_username)
+        
+        if keyword.isdigit():
+            query = query.filter(User.id == int(keyword))
+        
+        else:
+            query = query.filter(
+                (User.username.ilike(f"%{keyword}%")) |
+                (User.full_name.ilike(f"%{keyword}%"))
+            )
+        users = query.all()
+        
+        results = []
+        for user in users:
+            user_data = {
+                "id": user.id,
+                "username": user.username,
+                "full_name": user.full_name,
+                "email": user.email,
+                "avatar_url": user.avatar_url,
+                "status": user.status
+            }
+            results.append(user_data)
+        
+        return jsonify({
+            "count": len(results),
+            "users": results
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 404
