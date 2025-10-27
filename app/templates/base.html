@@ -30,21 +30,22 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16">
                 <div class="flex items-center gap-4">
-                    <a href="{{ url_for('main.index') }}" class="font-semibold text-lg text-indigo-600">CloudifyShare</a>
+                    <a href="{{ url_for('main.home') }}" class="font-semibold text-lg text-indigo-600">CloudifyShare</a>
                     <span class="text-sm text-gray-500">SaaS Messaging & File Sharing</span>
                 </div>
 
                 <div class="flex items-center gap-4">
-                    {% if current_user.is_authenticated %}
+                    {% if user %}
                     <div class="flex items-center gap-2">
-                        <img src="{{ current_user.avatar_url or url_for('static', filename='img/default-avatar.png') }}"
+                        <img src="{{ user.avatar_url or url_for('static', filename='img/default-avatar.png') }}"
                             class="w-8 h-8 rounded-full" alt="avatar">
-                        <span class="hidden sm:inline-block text-sm">{{ current_user.name }}</span>
+                        <span class="hidden sm:inline-block text-sm">{{ user.name }}</span>
                     </div>
                     {% else %}
                     <a href="{{ url_for('auth.login') }}" class="text-sm text-indigo-600">Đăng nhập</a>
                     {% endif %}
                 </div>
+
             </div>
         </div>
     </header>

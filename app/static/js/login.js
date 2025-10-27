@@ -13,7 +13,7 @@ form.addEventListener('submit', async (e) => {
     if (res.ok) {
       localStorage.setItem('access_token', data.access_token)
       alert('Đăng nhập thành công')
-      window.location.href = '/'
+      window.location.href = '/dashboard'
     } else {
       alert(data.error || 'Sai thông tin đăng nhập')
     }

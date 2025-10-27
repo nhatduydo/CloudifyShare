@@ -21,22 +21,8 @@
 <script>
 const token = localStorage.getItem('access_token')
 if(token){
-  fetch('/auth/me', {
-    headers: { 'Authorization': token }
-  }).then(async res=>{
-    const data = await res.json()
-    if(res.ok){
-      document.getElementById('guestActions').style.display='none'
-      document.getElementById('userInfo').classList.remove('hidden')
-      document.getElementById('fullName').textContent = data.full_name || data.username
-    } else {
-      localStorage.removeItem('access_token')
-    }
-  })
+  window.location.href = "/dashboard"
 }
-document.getElementById('logoutBtn')?.addEventListener('click', ()=>{
-  localStorage.removeItem('access_token')
-  location.reload()
-})
 </script>
+
 {% endblock %}
