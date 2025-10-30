@@ -61,8 +61,8 @@ def messages_page():
             pass
     return render_template("partials/messages.html", user=user)
 
-@main.route("/dashboard/fileshare")
-def fileshare_page():
+@main.route("/dashboard/storage")
+def storage_page():
     token = request.cookies.get('access_token')
     user = None
 
@@ -71,27 +71,14 @@ def fileshare_page():
             data = decode_token(token)
             user = {
                 "name": data.get("name"),
+                "email": data.get("email"),
                 "avatar_url": data.get("avatar_url")
             }
         except Exception:
             pass
-    return render_template("partials/share.html", user=user)
 
-@main.route("/dashboard/cloud")
-def cloud_page():
-    token = request.cookies.get('access_token')
-    user = None
+    return render_template("partials/storage.html", user=user)
 
-    if token:
-        try:
-            data = decode_token(token)
-            user = {
-                "name": data.get("name"),
-                "avatar_url": data.get("avatar_url")
-            }
-        except Exception:
-            pass
-    return render_template("partials/cloud.html", user=user)
 
 @main.route("/dashboard/profile")
 def profile_page():
