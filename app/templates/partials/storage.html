@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Lưu trữ & Chia sẻ - CloudifyShare{% endblock %}
+
+{% block content %}
+<div class="bg-white p-6 rounded-xl shadow-md">
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="text-xl font-semibold text-gray-800">Kho lưu trữ của tôi</h2>
+    <div class="flex items-center gap-2">
+      <input type="text" id="searchFile" placeholder="Tìm kiếm tệp..." class="border rounded px-3 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500">
+      <label class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded cursor-pointer text-sm">
+        <input type="file" id="fileUpload" class="hidden">
+        ⬆️ Tải lên
+      </label>
+    </div>
+  </div>
+
+  <table class="w-full text-sm border">
+    <thead class="bg-gray-100 text-gray-700">
+      <tr>
+        <th class="py-2 px-3 text-left">Tên tệp</th>
+        <th class="py-2 px-3">Dung lượng</th>
+        <th class="py-2 px-3">Ngày tải lên</th>
+        <th class="py-2 px-3">Chia sẻ</th>
+        <th class="py-2 px-3">Thao tác</th>
+      </tr>
+    </thead>
+    <tbody id="fileList">
+      <tr><td colspan="5" class="text-center text-gray-500 py-4">Đang tải danh sách...</td></tr>
+    </tbody>
+  </table>
+</div>
+<script src="/static/js/storage.js"></script>
+{% endblock %}

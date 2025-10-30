@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Đăng nhập — CloudifyShare{% endblock %}
+
+{% block content %}
+<div class="min-h-[80vh] flex items-center justify-center">
+  <div class="w-full max-w-md bg-white rounded-xl shadow p-8">
+    <h2 class="text-2xl font-semibold text-center text-indigo-600 mb-6">Đăng nhập với CloudifyShare</h2>
+    <form id="loginForm" class="space-y-5">
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Username</label>
+        <input id="username" type="text" required class="w-full mt-1 px-3 py-2 border rounded focus:ring-2 focus:ring-indigo-300">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Mật khẩu</label>
+        <input id="password" type="password" required class="w-full mt-1 px-3 py-2 border rounded focus:ring-2 focus:ring-indigo-300">
+      </div>
+      <button type="submit" class="w-full py-2 bg-indigo-600 text-white rounded">Đăng nhập</button>
+    </form>
+    <p class="text-sm text-center text-gray-600 mt-6">
+      Chưa có tài khoản?
+      <a href="{{ url_for('main.register_page') }}" class="text-indigo-600 hover:underline">Đăng ký ngay</a>
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/login.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Đăng ký — CloudifyShare{% endblock %}
+
+{% block content %}
+<div class="min-h-[80vh] flex items-center justify-center">
+  <div class="w-full max-w-md bg-white rounded-xl shadow p-8">
+    <h2 class="text-2xl font-semibold text-center text-indigo-600 mb-6">Đăng ký CloudifyShare</h2>
+    <form id="registerForm" enctype="multipart/form-data" class="space-y-4">
+      <input name="full_name" id="full_name" placeholder="Họ và tên" class="w-full border rounded px-3 py-2">
+      <input name="username" id="username" placeholder="Username" required class="w-full border rounded px-3 py-2">
+      <input name="email" id="email" type="email" placeholder="Email" required class="w-full border rounded px-3 py-2">
+      <input name="password" id="password" type="password" placeholder="Mật khẩu" required class="w-full border rounded px-3 py-2">
+      <input name="avatar_url" id="avatar_url" type="file" class="w-full">
+      <button type="submit" class="w-full py-2 bg-indigo-600 text-white rounded">Đăng ký</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/register.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Trang chủ — CloudifyShare{% endblock %}
+
+{% block content %}
+<div class="min-h-[80vh] flex flex-col items-center justify-center text-center">
+  <h1 class="text-3xl font-semibold text-indigo-700 mb-4">Chào mừng đến CloudifyShare</h1>
+  <p class="text-gray-600 mb-8">Nền tảng nhắn tin và chia sẻ dữ liệu trên Cloud</p>
+  <div id="userInfo" class="hidden">
+    <p class="text-lg text-gray-700">Xin chào, <span id="fullName" class="font-medium"></span></p>
+    <button id="logoutBtn" class="mt-4 px-4 py-2 bg-red-500 text-white rounded">Đăng xuất</button>
+  </div>
+  <div id="guestActions">
+    <a href="{{ url_for('main.login_page') }}" class="px-4 py-2 bg-indigo-600 text-white rounded">Đăng nhập</a>
+    <a href="{{ url_for('main.register_page') }}" class="px-4 py-2 border border-indigo-600 text-indigo-600 rounded ml-3">Đăng ký</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const token = localStorage.getItem('access_token')
+if(token){
+  window.location.href = "/dashboard"
+}
+</script>
+
+{% endblock %}
