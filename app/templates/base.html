@@ -13,6 +13,24 @@
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
     <style>
+        :root {
+            --color-surface: #ffffff;
+            --color-border: #e5e7eb;
+            --color-success: #16a34a;
+            --color-error: #dc2626;
+            --color-info: #2563eb;
+            --color-warning: #d97706;
+
+            --color-text: #111827;
+            --color-text-secondary: #6b7280;
+
+            --radius-base: 8px;
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --font-size-base: 14px;
+
+            --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
         .scrollbar-thin::-webkit-scrollbar {
             height: 8px;
             width: 8px
@@ -22,10 +40,107 @@
             background: rgba(0, 0, 0, 0.12);
             border-radius: 8px
         }
+
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toast {
+            min-width: 300px;
+            padding: 16px 20px;
+            border-radius: var(--radius-base);
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            box-shadow: var(--shadow-lg);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideIn 0.3s var(--ease-standard);
+        }
+
+        .toast.success {
+            border-left: 4px solid var(--color-success);
+        }
+
+        .toast.error {
+            border-left: 4px solid var(--color-error);
+        }
+
+        .toast.info {
+            border-left: 4px solid var(--color-info);
+        }
+
+        .toast-icon {
+            font-size: 20px;
+        }
+
+        .toast-message {
+            flex: 1;
+            color: var(--color-text);
+            font-size: var(--font-size-base);
+        }
+
+        .toast-close {
+            background: none;
+            border: none;
+            color: var(--color-text-secondary);
+            cursor: pointer;
+            font-size: 18px;
+            padding: 0;
+            width: 20px;
+            height: 20px;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .animate-fadeIn {
+            animation: fadeIn 0.2s ease-out;
+        }
     </style>
 </head>
 
 <body class="bg-gray-200 text-gray-800 min-h-screen flex flex-col">
+    <div id="toast-container"></div>
     {% block header %}
     <header class="bg-white shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -39,17 +154,93 @@
     </header>
     {% endblock %}
 
-    <main class="flex-1">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            {% block content %}
-            <div class="prose">
-                <h2>Chào mừng đến với CloudifyShare</h2>
-                <p>Hệ thống nhắn tin, gởi nhận, chia sẻ dữ liệu trên nền tảng cloud computing</p>
+    <div class="flex flex-1">
+        {% block sidebar %}
+        <aside class="w-64 bg-gradient-to-b from-indigo-700 to-indigo-900 text-white flex flex-col justify-between p-4">
+            <div>
+                <div class="flex items-center gap-3 mb-6">
+                    {% if user %}
+                    <img src="{{ user.avatar_url or url_for('static', filename='img/avatar-default.svg') }}"
+                        class="w-10 h-10 rounded-full border-2 border-white shadow-md" alt="Avatar">
+                    <div>
+                        <p class="font-semibold">{{ user.name }}</p>
+                        <p class="text-xs text-indigo-200">{{ user.email }}</p>
+                    </div>
+                    {% else %}
+                    <a href="{{ url_for('main.login_page') }}" class="flex items-center gap-3">
+                        <img src="{{ url_for('static', filename='img/avatar-default.svg') }}"
+                            class="w-10 h-10 rounded-full border-2 border-white shadow-md cursor-pointer hover:opacity-80"
+                            alt="Login">
+                        <div>
+                            <p class="font-semibold text-indigo-100 hover:underline">Đăng nhập</p>
+                            <p class="text-xs text-indigo-200">Nhấn để đăng nhập</p>
+                        </div>
+                    </a>
+                    {% endif %}
+                </div>
+
+                <nav class="space-y-2">
+                    <a href="{{ url_for('main.messages_page') }}"
+                        class="menu-item flex items-center gap-3 px-3 py-2 rounded-lg transition duration-150 hover:bg-indigo-600 hover:translate-x-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="w-5 h-5">
+                            <path fill-rule="evenodd"
+                                d="M4.848 2.771A49.144 49.144 0 0 1 12 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 0 1-3.476.383.39.39 0 0 0-.297.17l-2.755 4.133a.75.75 0 0 1-1.248 0l-2.755-4.133a.39.39 0 0 0-.297-.17 48.9 48.9 0 0 1-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97Z"
+                                clip-rule="evenodd" />
+                        </svg>
+                        <span>Tin nhắn</span>
+                    </a>
+
+                    <a href="{{ url_for('main.storage_page') }}"
+                        class="menu-item flex items-center gap-3 px-3 py-2 rounded-lg transition duration-150 hover:bg-indigo-600 hover:translate-x-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="w-5 h-5">
+                            <path fill-rule="evenodd"
+                                d="M4.5 9.75a6 6 0 0 1 11.573-2.226 3.75 3.75 0 0 1 4.133 4.303A4.5 4.5 0 0 1 18 20.25H6.75a5.25 5.25 0 0 1-2.23-10.004 6.072 6.072 0 0 1-.02-.496Z"
+                                clip-rule="evenodd" />
+                        </svg>
+                        <span>Lưu trữ & Chia sẻ</span>
+                    </a>
+
+                    <a href="{{ url_for('main.profile_page') }}"
+                        class="menu-item flex items-center gap-3 px-3 py-2 rounded-lg transition duration-150 hover:bg-indigo-600 hover:translate-x-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                            <path fill-rule="evenodd"
+                                d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z"
+                                clip-rule="evenodd" />
+                        </svg>
+                        Hồ sơ</a>
+                    </a>
+
+                    <a href="{{ url_for('main.settings_page') }}"
+                        class="menu-item flex items-center gap-3 px-3 py-2 rounded-lg transition duration-150 hover:bg-indigo-600 hover:translate-x-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="w-5 h-5">
+                            <path fill-rule="evenodd"
+                                d="M11.828 2.25c-.916 0-1.699.663-1.85 1.567l-.091.549a.798.798 0 0 1-.517.608 7.45 7.45 0 0 0-.478.198.798.798 0 0 1-.796-.064l-.453-.324a1.875 1.875 0 0 0-2.416.2l-.243.243a1.875 1.875 0 0 0-.2 2.416l.324.453a.798.798 0 0 1 .064.796 7.448 7.448 0 0 0-.198.478.798.798 0 0 1-.608.517l-.55.092a1.875 1.875 0 0 0-1.566 1.849v.344c0 .916.663 1.699 1.567 1.85l.549.091c.281.047.508.25.608.517.06.162.127.321.198.478a.798.798 0 0 1-.064.796l-.324.453a1.875 1.875 0 0 0 .2 2.416l.243.243c.648.648 1.67.733 2.416.2l.453-.324a.798.798 0 0 1 .796-.064c.157.071.316.137.478.198.267.1.47.327.517.608l.092.55c.15.903.932 1.566 1.849 1.566h.344c.916 0 1.699-.663 1.85-1.567l.091-.549a.798.798 0 0 1 .517-.608 7.52 7.52 0 0 0 .478-.198.798.798 0 0 1 .796.064l.453.324a1.875 1.875 0 0 0 2.416-.2l.243-.243c.648-.648.733-1.67.2-2.416l-.324-.453a.798.798 0 0 1-.064-.796c.071-.157.137-.316.198-.478.1-.267.327-.47.608-.517l.55-.091a1.875 1.875 0 0 0 1.566-1.85v-.344c0-.916-.663-1.699-1.567-1.85l-.549-.091a.798.798 0 0 1-.608-.517 7.507 7.507 0 0 0-.198-.478.798.798 0 0 1 .064-.796l.324-.453a1.875 1.875 0 0 0-.2-2.416l-.243-.243a1.875 1.875 0 0 0-2.416-.2l-.453.324a.798.798 0 0 1-.796.064 7.462 7.462 0 0 0-.478-.198.798.798 0 0 1-.517-.608l-.091-.55a1.875 1.875 0 0 0-1.85-1.566h-.344ZM12 15.75a3.75 3.75 0 1 0 0-7.5 3.75 3.75 0 0 0 0 7.5Z"
+                                clip-rule="evenodd" />
+                        </svg>
+                        <span>Cài đặt</span>
+                    </a>
+                </nav>
             </div>
-            {% endblock %}
-        </div>
-    </main>
-    <!-- <footer class="bg-white border-t text-sm text-gray-500">
+
+            <div class="border-t border-indigo-600 pt-4 text-center text-sm text-indigo-200">
+                CloudifyShare © 2025
+            </div>
+        </aside>
+        {% endblock %}
+
+        <main class="flex-1">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                {% block content %}
+                <div class="prose">
+                    <h2>Chào mừng đến với CloudifyShare</h2>
+                    <p>Hệ thống nhắn tin, gởi nhận, chia sẻ dữ liệu trên nền tảng cloud computing</p>
+                </div>
+                {% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <footer class="bg-white border-t text-sm text-gray-500">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between">
             <div>&copy; {{ current_year or 2025 }} CloudifyShare</div>
             <div>
@@ -57,7 +248,42 @@
                 <a href="#" class="hover:underline">Hỗ trợ</a>
             </div>
         </div>
-    </footer> -->
+    </footer>
+    {% block sidebar_scripts %}
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const menuItems = document.querySelectorAll('.menu-item');
+            const name = localStorage.getItem('user_name');
+            const email = localStorage.getItem('user_email');
+            const avatar = localStorage.getItem('user_avatar');
+
+            if (name) {
+                const loginSection = document.querySelector('aside div > a');
+                if (loginSection) {
+                    loginSection.outerHTML = `
+        <div class="flex items-center gap-3 mb-6 cursor-pointer" id="user-info">
+          <img src="${avatar}" class="w-10 h-10 rounded-full border-2 border-white shadow-md" alt="Avatar">
+          <div>
+            <p class="font-semibold">${name}</p>
+            <p class="text-xs text-indigo-200">${email}</p>
+          </div>
+        </div>`;
+                }
+            }
+
+            const userInfo = document.getElementById('user-info');
+            if (userInfo) {
+                userInfo.addEventListener('click', () => {
+                    showConfirm("Bạn có muốn đăng xuất không?", () => {
+                        localStorage.clear();
+                        window.location.reload();
+                    });
+                });
+            }
+        });
+    </script>
+    {% endblock %}
+
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     {% block scripts %}{% endblock %}
 </body>

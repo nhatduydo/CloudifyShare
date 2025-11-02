@@ -1,6 +1,6 @@
-
 const API_BASE = '/messages';
 const token = localStorage.getItem('access_token');
+const myId = parseInt(localStorage.getItem('user_id'));
 
 const userList = document.querySelector('#userList');
 const chatBox = document.querySelector('#chatBox');
@@ -13,13 +13,8 @@ const chatHeader = document.querySelector('#chatHeader');
 async function loadChatList() {
   userList.innerHTML = `<p class="p-3 text-gray-500">Đang tải...</p>`;
   try {
-    console.log("token:", token);
     const res = await fetch(`${API_BASE}/list`, {
-      headers: {
-        'Authorization': `${token}`,
-        'Accept': 'application/json'
-      }
-
+      headers: { 'Authorization': token, 'Accept': 'application/json' }
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Không thể tải danh sách');
@@ -54,9 +49,8 @@ function renderUserList(users) {
 searchInput?.addEventListener('input', async (e) => {
   const q = e.target.value.trim();
   if (!q) return loadChatList();
-  console.log('Token:', token);
   const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}`, {
-    headers: { 'Authorization': `${token}` }
+    headers: { 'Authorization': token }
   });
   const data = await res.json();
   if (res.ok) renderUserList(data.users);
@@ -69,20 +63,31 @@ async function loadConversation(user) {
       <p class="font-semibold">${user.full_name || user.username}</p>
     </div>
   `;
+
   chatBox.innerHTML = `<p class="text-gray-500 text-center py-4">Đang tải tin nhắn...</p>`;
   chatBox.dataset.receiverId = user.id;
 
   const res = await fetch(`${API_BASE}/conversation/${user.id}`, {
-    headers: { 'Authorization': `${token}` }
+    headers: { 'Authorization': token }
   });
+
   const data = await res.json();
+
   if (!res.ok) {
     chatBox.innerHTML = `<p class="text-red-500 text-center">${data.error}</p>`;
     return;
   }
 
   chatBox.innerHTML = '';
-  data.messages.forEach(m => renderMessage(m));
+
+  //FIX QUAN TRỌNG: phân loại trái/phải dựa trên sender_id
+  data.messages.forEach(msg => {
+    console.log(typeof msg.sender_id, msg.sender_id);
+    console.log(typeof myId, myId);
+    const isSender = Number(msg.sender_id) === Number(myId);
+    renderMessage(msg, isSender);
+  });
+
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
@@ -109,14 +114,25 @@ function renderMessage(msg, isSender = false) {
 
 messageForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
+
   const receiverId = chatBox.dataset.receiverId;
-  if (!receiverId) return alert('Chưa chọn người nhận!');
+  if (!receiverId) return showToast('Chưa chọn người nhận!', 'error');
 
   const formData = new FormData();
   formData.append('receiver_id', receiverId);
   formData.append('content', messageInput.value);
   formData.append('message_type', fileInput.files.length ? 'image' : 'text');
   if (fileInput.files.length) formData.append('file', fileInput.files[0]);
+
+  // ✅ Optimistic UI
+  const tempMsg = {
+    sender_id: myId,
+    content: messageInput.value,
+    message_type: fileInput.files.length ? 'image' : 'text',
+    file_url: fileInput.files.length ? URL.createObjectURL(fileInput.files[0]) : null
+  };
+  renderMessage(tempMsg, true);
+  chatBox.scrollTop = chatBox.scrollHeight;
 
   const res = await fetch(`${API_BASE}/send`, {
     method: 'POST',
@@ -125,22 +141,37 @@ messageForm?.addEventListener('submit', async (e) => {
   });
 
   const data = await res.json();
-
-  if (res.ok) {
-    renderMessage({
-      sender_id: parseInt(localStorage.getItem('user_id')),
-      content: data.data.content,
-      message_type: data.data.message_type,
-      file_url: data.data.file_url,
-      created_at: data.data.created_at
-    }, true);
-
-    messageInput.value = '';
-    fileInput.value = '';
-    chatBox.scrollTop = chatBox.scrollHeight;
-  } else {
-    alert(data.error || 'Lỗi gửi tin nhắn');
+  if (!res.ok) {
+    showToast(data.error || 'Lỗi gửi tin nhắn', 'error');
+    return;
   }
+
+  messageInput.value = '';
+  fileInput.value = '';
+});
+
+const fileNameDisplay = document.querySelector('#fileName');
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length > 0) {
+    fileNameDisplay.textContent = fileInput.files[0].name;
+  } else {
+    fileNameDisplay.textContent = '';
+  }
+});
+const removeFileBtn = document.querySelector('#removeFile');
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length > 0) {
+    fileNameDisplay.textContent = fileInput.files[0].name;
+    removeFileBtn.classList.remove('hidden');
+  }
+});
+
+removeFileBtn.addEventListener('click', () => {
+  fileInput.value = '';
+  fileNameDisplay.textContent = '';
+  removeFileBtn.classList.add('hidden');
 });
 
 
