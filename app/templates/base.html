@@ -25,7 +25,8 @@
     </style>
 </head>
 
-<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col">
+<body class="bg-gray-200 text-gray-800 min-h-screen flex flex-col">
+    {% block header %}
     <header class="bg-white shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16">
@@ -33,22 +34,10 @@
                     <a href="{{ url_for('main.home') }}" class="font-semibold text-lg text-indigo-600">CloudifyShare</a>
                     <span class="text-sm text-gray-500">SaaS Messaging & File Sharing</span>
                 </div>
-
-                <div class="flex items-center gap-4">
-                    {% if user %}
-                    <div class="flex items-center gap-2">
-                        <img src="{{ user.avatar_url or url_for('static', filename='img/default-avatar.png') }}"
-                            class="w-8 h-8 rounded-full" alt="avatar">
-                        <span class="hidden sm:inline-block text-sm">{{ user.name }}</span>
-                    </div>
-                    {% else %}
-                    <a href="{{ url_for('main.login_page') }}" class="text-sm text-indigo-600">Đăng nhập</a>
-                    {% endif %}
-                </div>
-
             </div>
         </div>
     </header>
+    {% endblock %}
 
     <main class="flex-1">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -60,7 +49,7 @@
             {% endblock %}
         </div>
     </main>
-    <footer class="bg-white border-t text-sm text-gray-500">
+    <!-- <footer class="bg-white border-t text-sm text-gray-500">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between">
             <div>&copy; {{ current_year or 2025 }} CloudifyShare</div>
             <div>
@@ -68,7 +57,7 @@
                 <a href="#" class="hover:underline">Hỗ trợ</a>
             </div>
         </div>
-    </footer>
+    </footer> -->
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     {% block scripts %}{% endblock %}
 </body>

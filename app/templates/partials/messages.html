@@ -1,62 +1,33 @@
 {% extends "base.html" %}
 {% block title %}Tin nhắn - CloudifyShare{% endblock %}
 
+{% block header %}{% endblock %}
+
 {% block content %}
-<div class="flex h-[80vh] bg-white rounded-xl shadow-md overflow-hidden">
-    <!-- Danh sách người -->
-    <div class="w-1/3 border-r flex flex-col">
-        <div class="p-3 border-b">
-            <input type="text" placeholder="🔍 Tìm người dùng..." class="w-full border rounded-lg px-3 py-2 text-sm focus:ring focus:ring-indigo-200">
-        </div>
-        <div class="flex-1 overflow-y-auto">
-            {% for u in users %}
-            <a href="{{ url_for('main.chat', user_id=u.id) }}" class="block px-4 py-3 hover:bg-indigo-50">
-                <div class="flex items-center gap-3">
-                    <img src="{{ u.avatar_url or url_for('static', filename='img/default-avatar.png') }}" class="w-8 h-8 rounded-full" alt="">
-                    <div>
-                        <p class="font-medium">{{ u.name }}</p>
-                        <p class="text-xs text-gray-500 truncate">{{ u.last_message or "Chưa có tin nhắn" }}</p>
-                    </div>
-                </div>
-            </a>
-            {% endfor %}
-        </div>
+
+<div class="flex h-[70vh] bg-white rounded-xl shadow-md overflow-hidden">
+  <div class="w-1/3 border-r flex flex-col">
+    <div class="p-3 border-b">
+      <input id="searchUser" type="text" placeholder="Tìm người dùng..." class="w-full border rounded-lg px-3 py-2 text-sm focus:ring focus:ring-indigo-200">
     </div>
+    <div id="userList" class="flex-1 overflow-y-auto"></div>
+  </div>
 
-    <!-- Cửa sổ chat -->
-    <div class="flex-1 flex flex-col">
-        {% if chat_user %}
-        <div class="p-3 border-b flex items-center gap-3">
-            <img src="{{ chat_user.avatar_url or url_for('static', filename='img/default-avatar.png') }}" class="w-8 h-8 rounded-full">
-            <p class="font-semibold">{{ chat_user.name }}</p>
-        </div>
-
-        <div class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-            {% for m in messages %}
-            <div class="flex {% if m.sender_id == user.id %}justify-end{% endif %}">
-                <div class="max-w-[70%] p-3 rounded-2xl {% if m.sender_id == user.id %}bg-indigo-500 text-white{% else %}bg-gray-200{% endif %}">
-                    {% if m.type == 'text' %}
-                        {{ m.content }}
-                    {% elif m.type == 'image' %}
-                        <img src="{{ m.content }}" class="rounded-lg max-w-full">
-                    {% endif %}
-                    <div class="text-xs opacity-70 mt-1">{{ m.created_at.strftime('%H:%M') }}</div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-
-        <form action="{{ url_for('main.send_message', user_id=chat_user.id) }}" method="POST" enctype="multipart/form-data" class="border-t p-3 flex items-center gap-2">
-            <input type="text" name="message" placeholder="Nhập tin nhắn..." class="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring focus:ring-indigo-200">
-            <input type="file" name="file" class="hidden" id="file-input">
-            <label for="file-input" class="cursor-pointer text-indigo-600">📎</label>
-            <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-lg">Gửi</button>
-        </form>
-        {% else %}
-        <div class="flex-1 flex items-center justify-center text-gray-500">
-            <p>Chọn một người để bắt đầu trò chuyện.</p>
-        </div>
-        {% endif %}
+  <div class="flex-1 flex flex-col">
+    <div id="chatHeader" class="p-3 border-b text-gray-700"></div>
+    <div id="chatBox" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+      <p class="text-gray-500 text-center">Chọn người để bắt đầu trò chuyện</p>
     </div>
+    <form id="messageForm" class="border-t p-3 flex items-center gap-2">
+      <input id="messageInput" type="text" placeholder="Nhập tin nhắn..." class="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring focus:ring-indigo-200">
+      <input type="file" id="fileInput" class="hidden">
+      <label for="fileInput" class="cursor-pointer text-indigo-600">📎</label>
+      <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-lg">Gửi</button>
+    </form>
+  </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/message.js') }}"></script>
 {% endblock %}
