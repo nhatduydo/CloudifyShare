@@ -60,13 +60,13 @@ document.getElementById('fileUpload').addEventListener('change', async (e) => {
     })
     const data = await res.json()
     if (res.ok) {
-      alert('Tải lên thành công!')
+      showToast('Tải lên thành công!', 'success')
       loadFiles()
     } else {
-      alert(data.error || 'Lỗi tải lên')
+      showToast(data.error || 'Lỗi tải lên', 'error')
     }
   } catch {
-    alert('Lỗi kết nối máy chủ!')
+    showToast('Lỗi kết nối máy chủ!', 'error')
   }
 })
 
@@ -77,7 +77,7 @@ async function deleteFile(id) {
     headers: { 'Authorization': token }
   })
   const data = await res.json()
-  alert(data.message || data.error)
+  showToast(data.message || data.error, 'info')
   loadFiles()
 }
 
@@ -87,7 +87,7 @@ async function downloadFile(id) {
   })
   const data = await res.json()
   if (res.ok) window.open(data.download_link, '_blank')
-  else alert(data.error)
+  else showToast(data.error, 'error')
 }
 
 // async function toggleShare(id, isPublic) {
@@ -98,7 +98,7 @@ async function downloadFile(id) {
 //   })
 //   const data = await res.json()
 //   console.log('Toggle response:', data)
-//   alert(data.message || data.error)
+//   showToast(data.message || data.error, 'error')
 //   loadFiles()
 // }
 async function toggleShare(id, isPublic) {
@@ -111,7 +111,7 @@ async function toggleShare(id, isPublic) {
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || 'Lỗi chia sẻ')
 
-    alert(data.message)
+    showToast(data.message, 'info')
     const row = [...document.querySelectorAll('#fileList tr')]
       .find(r => r.innerHTML.includes(`toggleShare(${id}`))
     if (row) {
@@ -129,7 +129,7 @@ async function toggleShare(id, isPublic) {
     }
 
   } catch (err) {
-    alert(err.message)
+    showToast(err.message, 'error')
   }
 }
 

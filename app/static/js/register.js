@@ -9,12 +9,12 @@ form.addEventListener('submit', async (e) => {
     })
     const data = await res.json()
     if (res.ok) {
-      alert('Đăng ký thành công')
+      showToast('Đăng ký thành công', 'success')
       window.location.href = '/login'
     } else {
-      alert(data.error || 'Đăng ký thất bại')
+      showToast(data.error || 'Đăng ký thất bại', 'error')
     }
   } catch {
-    alert('Không thể kết nối đến máy chủ')
+    showToast('Không thể kết nối đến máy chủ', 'error')
   }
 })

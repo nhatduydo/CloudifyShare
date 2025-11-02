@@ -15,16 +15,17 @@ form.addEventListener('submit', async (e) => {
 
     if (res.ok) {
       localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('user_id', data.user.id);
       localStorage.setItem('user_name', data.user?.name || username);
       localStorage.setItem('user_email', data.user?.email || '');
       localStorage.setItem('user_avatar', data.user?.avatar_url || '/static/img/avatar-default.svg');
 
-      alert('Đăng nhập thành công!');
+      showToast('Đăng nhập thành công!', 'success');
       window.location.href = '/dashboard';
     } else {
-      alert(data.error || 'Sai thông tin đăng nhập');
+      showToast(data.error || 'Sai thông tin đăng nhập', 'error');
     }
   } catch {
-    alert('Không thể kết nối đến máy chủ');
+    aleshowToastrt('Không thể kết nối đến máy chủ', 'error');
   }
 });
