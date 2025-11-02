@@ -39,59 +39,59 @@ def send_message():
             db.session.flush()
             
             # Lưu tin nhắn SQL
-            new_msg = Message(
-                sender_id=sender.id,
-                receiver_id=receiver_id,
-                content=content,
-                message_type=MessageType(message_type),
-                file_id=file_obj.id if file_obj else None,
-                created_at=datetime.utcnow()
-            )
-            db.session.add(new_msg)
-            db.session.commit()
-            
-            # Push lên Firebase
-            chat_id = f"{min(sender.id, int(receiver_id))}_{max(sender.id, int(receiver_id))}"
-            ref = firebase_db.reference(f"messages/{chat_id}")
-            ref.push({
+        new_msg = Message(
+            sender_id=sender.id,
+            receiver_id=receiver_id,
+            content=content,
+            message_type=MessageType(message_type),
+            file_id=file_obj.id if file_obj else None,
+            created_at=datetime.utcnow()
+        )
+        db.session.add(new_msg)
+        db.session.commit()
+        
+        # Push lên Firebase
+        chat_id = f"{min(sender.id, int(receiver_id))}_{max(sender.id, int(receiver_id))}"
+        ref = firebase_db.reference(f"messages/{chat_id}")
+        ref.push({
+            "id": new_msg.id,
+            "sender_id": new_msg.sender_id,
+            "receiver_id": new_msg.receiver_id,
+            "content": new_msg.content,
+            "message_type": new_msg.message_type.value,
+            "file_url": file_obj.file_url if file_obj else None,
+            "timestamp": new_msg.created_at.isoformat()
+        })
+        
+        sender_info = {
+            "id": sender.id,
+            "username": sender.username,
+            "full_name": sender.full_name,
+            "avatar_url": sender.avatar_url,
+            "email": sender.email,
+        }
+
+        receiver = User.query.get(receiver_id)
+        receiver_info = {
+            "id": receiver.id,
+            "username": receiver.username,
+            "full_name": receiver.full_name,
+            "avatar_url": receiver.avatar_url,
+            "email": receiver.email,
+        }
+
+        return jsonify({
+            "message": "Gửi tin nhắn thành công",
+            "data": {
                 "id": new_msg.id,
-                "sender_id": new_msg.sender_id,
-                "receiver_id": new_msg.receiver_id,
                 "content": new_msg.content,
                 "message_type": new_msg.message_type.value,
                 "file_url": file_obj.file_url if file_obj else None,
-                "timestamp": new_msg.created_at.isoformat()
-            })
-            
-            sender_info = {
-                "id": sender.id,
-                "username": sender.username,
-                "full_name": sender.full_name,
-                "avatar_url": sender.avatar_url,
-                "email": sender.email,
+                "created_at": new_msg.created_at,
+                "sender": sender_info,
+                "receiver": receiver_info
             }
-
-            receiver = User.query.get(receiver_id)
-            receiver_info = {
-                "id": receiver.id,
-                "username": receiver.username,
-                "full_name": receiver.full_name,
-                "avatar_url": receiver.avatar_url,
-                "email": receiver.email,
-            }
-
-            return jsonify({
-                "message": "Gửi tin nhắn thành công",
-                "data": {
-                    "id": new_msg.id,
-                    "content": new_msg.content,
-                    "message_type": new_msg.message_type.value,
-                    "file_url": file_obj.file_url if file_obj else None,
-                    "created_at": new_msg.created_at,
-                    "sender": sender_info,
-                    "receiver": receiver_info
-                }
-            }), 201
+        }), 201
             
     except Exception as e:
         db.session.rollback()

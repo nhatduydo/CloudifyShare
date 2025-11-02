@@ -3,6 +3,22 @@ from flask_jwt_extended import decode_token
 
 main = Blueprint("main", __name__)
 
+@main.context_processor
+def inject_user():
+    token = request.cookies.get('access_token')
+    user = None
+    if token:
+        try:
+            data = decode_token(token)
+            user = {
+                "name": data.get("name"),
+                "email": data.get("email"),
+                "avatar_url": data.get("avatar_url")
+            }
+        except Exception:
+            pass
+    return dict(user=user)
+
 @main.route("/")
 def home():
     token = request.cookies.get('access_token')

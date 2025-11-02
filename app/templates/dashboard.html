@@ -1,70 +1,100 @@
 {% extends "base.html" %}
 {% block title %}Bảng điều khiển - CloudifyShare{% endblock %}
 
-{% block content %}
-<div class="flex h-[80vh] bg-white rounded-xl shadow-md overflow-hidden">
 
-  <aside class="w-64 bg-gray-100 border-r p-4 flex flex-col justify-between">
+{% block content %}
+<div class="flex h-[80vh] rounded-xl shadow-lg overflow-hidden bg-gradient-to-br from-indigo-50 via-white to-blue-50">
+
+  <!-- Sidebar -->
+  <aside class="w-64 bg-gradient-to-b from-indigo-700 to-indigo-900 text-white flex flex-col justify-between p-4">
     <div>
       <div class="flex items-center gap-3 mb-6">
+        {% if user %}
         <img src="{{ user.avatar_url or url_for('static', filename='img/avatar-default.svg') }}"
-          class="w-10 h-10 rounded-full" alt="Avatar">
+          class="w-10 h-10 rounded-full border-2 border-white shadow-md" alt="Avatar">
         <div>
-          <p class="font-semibold text-gray-800">{{ user.name }}</p>
-          <p class="text-xs text-gray-500">{{ user.email }}</p>
+          <p class="font-semibold">{{ user.name }}</p>
+          <p class="text-xs text-indigo-200">{{ user.email }}</p>
         </div>
+        {% else %}
+        <a href="{{ url_for('main.login_page') }}" class="flex items-center gap-3">
+          <img src="{{ url_for('static', filename='img/avatar-default.svg') }}"
+            class="w-10 h-10 rounded-full border-2 border-white shadow-md cursor-pointer hover:opacity-80" alt="Login">
+          <div>
+            <p class="font-semibold text-indigo-100 hover:underline">Đăng nhập</p>
+            <p class="text-xs text-indigo-200">Nhấn để đăng nhập</p>
+          </div>
+        </a>
+        {% endif %}
       </div>
 
       <nav class="space-y-2">
         <a href="#" data-url="{{ url_for('main.messages_page') }}"
-          class="menu-item block px-3 py-2 rounded-lg hover:bg-indigo-50 text-gray-700"><svg
-            xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+          class="menu-item flex items-center gap-3 px-3 py-2 rounded-lg transition duration-150 hover:bg-indigo-600 hover:translate-x-1">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="w-5 h-5">
             <path fill-rule="evenodd"
               d="M4.848 2.771A49.144 49.144 0 0 1 12 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 0 1-3.476.383.39.39 0 0 0-.297.17l-2.755 4.133a.75.75 0 0 1-1.248 0l-2.755-4.133a.39.39 0 0 0-.297-.17 48.9 48.9 0 0 1-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97Z"
               clip-rule="evenodd" />
           </svg>
-          Tin nhắn</a>
+          <span>Tin nhắn</span>
+        </a>
+
         <a href="#" data-url="{{ url_for('main.storage_page') }}"
-          class="menu-item block px-3 py-2 rounded-lg hover:bg-indigo-50 text-gray-700">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+          class="menu-item flex items-center gap-3 px-3 py-2 rounded-lg transition duration-150 hover:bg-indigo-600 hover:translate-x-1">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="w-5 h-5">
             <path fill-rule="evenodd"
               d="M4.5 9.75a6 6 0 0 1 11.573-2.226 3.75 3.75 0 0 1 4.133 4.303A4.5 4.5 0 0 1 18 20.25H6.75a5.25 5.25 0 0 1-2.23-10.004 6.072 6.072 0 0 1-.02-.496Z"
               clip-rule="evenodd" />
           </svg>
-          Lưu trữ & Chia sẻ
+          <span>Lưu trữ & Chia sẻ</span>
         </a>
+
         <a href="#" data-url="{{ url_for('main.profile_page') }}"
-          class="menu-item block px-3 py-2 rounded-lg hover:bg-indigo-50 text-gray-700"><svg
-            xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+          class="menu-item flex items-center gap-3 px-3 py-2 rounded-lg transition duration-150 hover:bg-indigo-600 hover:translate-x-1">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
             <path fill-rule="evenodd"
               d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z"
               clip-rule="evenodd" />
           </svg>
           Hồ sơ</a>
+        </a>
+
         <a href="#" data-url="{{ url_for('main.settings_page') }}"
-          class="menu-item block px-3 py-2 rounded-lg hover:bg-indigo-50 text-gray-700"><svg
-            xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+          class="menu-item flex items-center gap-3 px-3 py-2 rounded-lg transition duration-150 hover:bg-indigo-600 hover:translate-x-1">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="w-5 h-5">
             <path fill-rule="evenodd"
               d="M11.828 2.25c-.916 0-1.699.663-1.85 1.567l-.091.549a.798.798 0 0 1-.517.608 7.45 7.45 0 0 0-.478.198.798.798 0 0 1-.796-.064l-.453-.324a1.875 1.875 0 0 0-2.416.2l-.243.243a1.875 1.875 0 0 0-.2 2.416l.324.453a.798.798 0 0 1 .064.796 7.448 7.448 0 0 0-.198.478.798.798 0 0 1-.608.517l-.55.092a1.875 1.875 0 0 0-1.566 1.849v.344c0 .916.663 1.699 1.567 1.85l.549.091c.281.047.508.25.608.517.06.162.127.321.198.478a.798.798 0 0 1-.064.796l-.324.453a1.875 1.875 0 0 0 .2 2.416l.243.243c.648.648 1.67.733 2.416.2l.453-.324a.798.798 0 0 1 .796-.064c.157.071.316.137.478.198.267.1.47.327.517.608l.092.55c.15.903.932 1.566 1.849 1.566h.344c.916 0 1.699-.663 1.85-1.567l.091-.549a.798.798 0 0 1 .517-.608 7.52 7.52 0 0 0 .478-.198.798.798 0 0 1 .796.064l.453.324a1.875 1.875 0 0 0 2.416-.2l.243-.243c.648-.648.733-1.67.2-2.416l-.324-.453a.798.798 0 0 1-.064-.796c.071-.157.137-.316.198-.478.1-.267.327-.47.608-.517l.55-.091a1.875 1.875 0 0 0 1.566-1.85v-.344c0-.916-.663-1.699-1.567-1.85l-.549-.091a.798.798 0 0 1-.608-.517 7.507 7.507 0 0 0-.198-.478.798.798 0 0 1 .064-.796l.324-.453a1.875 1.875 0 0 0-.2-2.416l-.243-.243a1.875 1.875 0 0 0-2.416-.2l-.453.324a.798.798 0 0 1-.796.064 7.462 7.462 0 0 0-.478-.198.798.798 0 0 1-.517-.608l-.091-.55a1.875 1.875 0 0 0-1.85-1.566h-.344ZM12 15.75a3.75 3.75 0 1 0 0-7.5 3.75 3.75 0 0 0 0 7.5Z"
               clip-rule="evenodd" />
           </svg>
-          Cài đặt</a>
+          <span>Cài đặt</span>
+        </a>
       </nav>
+    </div>
+
+    <div class="border-t border-indigo-600 pt-4 text-center text-sm text-indigo-200">
+      CloudifyShare © 2025
     </div>
   </aside>
 
-  <section id="dashboard-content" class="flex-1 p-6 text-gray-700">
-    <p>Chọn một mục trong menu để bắt đầu.</p>
+  <!-- Main content -->
+  <section id="dashboard-content" class="flex-1 p-8 text-gray-800 bg-white/80 backdrop-blur-sm overflow-y-auto h-[80vh]">
+    <div class="text-center mt-24">
+      <h2 class="text-2xl font-semibold text-indigo-700">Chào mừng đến bảng điều khiển!</h2>
+      <p class="text-gray-500 mt-2">Chọn một mục trong menu để bắt đầu.</p>
+    </div>
   </section>
 
 </div>
-
 {% endblock %}
+
 {% block scripts %}
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const content = document.getElementById('dashboard-content')
     const menuItems = document.querySelectorAll('.menu-item')
+    const name = localStorage.getItem('user_name');
+    const email = localStorage.getItem('user_email');
+    const avatar = localStorage.getItem('user_avatar');
 
     menuItems.forEach(item => {
       item.addEventListener('click', async (e) => {
@@ -81,11 +111,44 @@
             script.id = 'storage-script'
             document.body.appendChild(script)
           }
+          if (url.includes('/message') && !document.getElementById('message-script')) {
+            const script = document.createElement('script')
+            script.src = '/static/js/message.js'
+            script.id = 'message-script'
+            document.body.appendChild(script)
+          }
         } catch (err) {
           content.innerHTML = '<p class="text-red-500">Không thể tải nội dung.</p>'
         }
       })
     })
-  })
+
+    if (name) {
+      const loginSection = document.querySelector('aside div > a');
+      if (loginSection) {
+        loginSection.outerHTML = `
+        <div class="flex items-center gap-3 mb-6 cursor-pointer" id="user-info">
+          <img src="${avatar}" class="w-10 h-10 rounded-full border-2 border-white shadow-md" alt="Avatar">
+          <div>
+            <p class="font-semibold">${name}</p>
+            <p class="text-xs text-indigo-200">${email}</p>
+          </div>
+        </div>
+      `;
+      }
+    }
+    const userInfo = document.getElementById('user-info');
+    if (userInfo) {
+      userInfo.addEventListener('click', () => {
+        if (confirm('Bạn có muốn đăng xuất không?')) {
+          localStorage.clear();
+          window.location.reload();
+        }
+      });
+    }
+
+  });
 </script>
+
+
 {% endblock %}
