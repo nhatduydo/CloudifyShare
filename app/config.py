@@ -11,6 +11,10 @@ class Config:
         "mysql+pymysql://admin:Admin%23123@cloudsharedb.cclau0qkccdx.us-east-1.rds.amazonaws.com:3306/cloudsharedb"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_recycle": 280
+    }
     
     # Cloudinary
     CLOUDINARY_CLOUD_NAME= os.getenv("CLOUDINARY_CLOUD_NAME")
