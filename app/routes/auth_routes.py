@@ -94,3 +94,104 @@ def register():
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
+# api cập nhập avatar
+@auth.route("/update-avatar", methods=["PUT"])
+@jwt_required()
+def update_avatar():
+    try:
+        current_user = get_jwt_identity()
+        user = User.query.filter_by(username=current_user).first()
+        
+        if not user:
+            return jsonify({"error": "Người dùng không tồn tại"}), 404
+        
+        avatar_file = request.files.get("avatar")
+        if not avatar_file:
+            return jsonify({"error": "Thiếu hình ảnh"}), 400
+        
+        # upload lên cloudinary
+        upload_result = cloudinary.uploader.upload(
+            avatar_file,
+            foloder="avatars",
+            public_id=f"user_{user.id}",
+            overwrite=True,
+            resource_type="image"
+        )
+        
+        user.avatar_url = upload_result.get("secure_url")
+        db.session.commit()
+        
+        return jsonify({
+            "message": "Cập nhật ảnh đại diện thành công",
+            "avatar_url": user.avatar_url
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+    
+# api cập nhập thông tin
+@auth.route("/update-account", methods=["PUT"])
+@jwt_required()
+def update_account():
+    try:
+        current_user = get_jwt_identity()
+        user = User.query.filter_by(username=current_user).first()
+        
+        if not user:
+            return jsonify({"error": "Người dùng không tồn tại"}), 404
+        
+        data = request.json
+        full_name = data.get("full_name")
+        email = data.get("email")
+        password = data.get("password")
+        
+        if email and User.query.filter(User.email == email, User.id != user.id).first():
+            return jsonify({"error": "Email đã được sử dụng"}), 400
+        
+        if full_name:
+            user.full_name = full_name
+            
+        if email:
+            user.email = email
+            
+        if password:
+            user.password = generate_password_hash(password)
+
+        db.session.commit()
+        
+        return jsonify({
+            "message": "Cập nhật tài khoản thành công",
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "full_name": user.full_name,
+                "email": user.email,
+                "avatar_url": user.avatar_url,
+            }
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+    
+# api lấy thông tin tài khoản
+@auth.route("/me", methods=["GET"])
+@jwt_required()
+def get_current_user():
+    try:
+        current_user = get_jwt_identity()
+        user = User.query.filter_by(username=current_user).first()
+
+        if not user:
+            return jsonify({"error": "Người dùng không tồn tại"}), 404
+
+        return jsonify({
+            "id": user.id,
+            "username": user.username,
+            "full_name": user.full_name,
+            "email": user.email,
+            "avatar_url": user.avatar_url,
+            "status": user.status,
+            "created_at": user.created_at
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
