@@ -125,26 +125,41 @@ Trong ô User data, dán đoạn script sau để EC2 tự cài app Flask khi kh
 
 ```
 #!/bin/bash
-# Cập nhật và cài đặt môi trường cần thiết
-sudo apt update -y
-sudo apt install -y python3 python3-pip git
+# CloudifyShare Auto Deploy Script (Ubuntu 22.04 - Stable)
 
-# Clone project Flask từ GitHub (nhánh main)
+set -e
+
+# 1. Update system and install dependencies
+apt update -y
+apt install -y python3 python3-pip git
+
+# 2. Clone project from GitHub (branch main)
 cd /home/ubuntu
 if [ ! -d "CloudifyShare" ]; then
   git clone -b main https://github.com/nhatduydo/CloudifyShare.git
 fi
 cd CloudifyShare
 
-# Cài đặt các thư viện Python
+# 3. Install Python dependencies
 pip install -r requirements.txt
 
-# Thêm lệnh auto chạy Flask vào crontab khi máy khởi động lại
-croncmd="@reboot cd /home/ubuntu/CloudifyShare && nohup python3 run.py > /home/ubuntu/app.log 2>&1 &"
+# 4. Define log file
+LOGFILE="/home/ubuntu/app.log"
+
+# 5. Stop old Flask process if running
+pkill -f "python3 run.py" || true
+
+# 6. Fix permissions
+chown -R ubuntu:ubuntu /home/ubuntu/CloudifyShare
+chmod -R 755 /home/ubuntu/CloudifyShare
+
+# 7. Add cron job to auto start Flask on reboot
+croncmd="@reboot cd /home/ubuntu/CloudifyShare && nohup python3 run.py --host=0.0.0.0 --port=5000 > $LOGFILE 2>&1 &"
 (crontab -l 2>/dev/null | grep -F "$croncmd") || (crontab -l 2>/dev/null; echo "$croncmd") | crontab -
 
-# Chạy Flask lần đầu tiên khi instance được tạo
-nohup python3 run.py --host=0.0.0.0 --port=80 > /home/ubuntu/app.log 2>&1 &
+# 8. Start Flask app immediately
+nohup python3 run.py --host=0.0.0.0 --port=5000 > $LOGFILE 2>&1 &
+
 ```
 ```
 EC2 cài Python, pip, git
