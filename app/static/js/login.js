@@ -21,11 +21,13 @@ form.addEventListener('submit', async (e) => {
       localStorage.setItem('user_avatar', data.user?.avatar_url || '/static/img/avatar-default.svg');
 
       showToast('Đăng nhập thành công!', 'success');
-      window.location.href = '/dashboard';
+      setTimeout(() => {
+        window.location.href = '/dashboard';
+      }, 1800);
     } else {
       showToast(data.error || 'Sai thông tin đăng nhập', 'error');
     }
   } catch {
-    aleshowToastrt('Không thể kết nối đến máy chủ', 'error');
+    showToast('Không thể kết nối đến máy chủ', 'error');
   }
 });

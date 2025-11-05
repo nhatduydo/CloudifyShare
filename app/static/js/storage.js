@@ -101,6 +101,30 @@ async function downloadFile(id) {
 //   showToast(data.message || data.error, 'error')
 //   loadFiles()
 // }
+
+function addPublicLinkRow(row, url) {
+  removePublicLinkRow(row)
+
+  const linkRow = document.createElement('tr')
+  linkRow.className = 'public-link-row'
+  linkRow.innerHTML = `
+    <td colspan="5" class="bg-gray-50 text-sm text-blue-600 py-1 px-3">
+      Link công khai: 
+      <a href="${url}" target="_blank" class="underline">${url}</a>
+      <button class="ml-2 text-xs text-gray-600 underline" onclick="navigator.clipboard.writeText('${url}').then(() => showToast('Đã copy link!', 'success'))">Copy</button>
+    </td>
+  `
+  row.insertAdjacentElement('afterend', linkRow)
+}
+
+function removePublicLinkRow(row) {
+  const next = row.nextElementSibling
+  if (next && next.classList.contains('public-link-row')) {
+    next.remove()
+  }
+}
+
+
 async function toggleShare(id, isPublic) {
   const endpoint = isPublic ? 'make_private' : 'make_public'
   try {
@@ -112,19 +136,26 @@ async function toggleShare(id, isPublic) {
     if (!res.ok) throw new Error(data.error || 'Lỗi chia sẻ')
 
     showToast(data.message, 'info')
+
     const row = [...document.querySelectorAll('#fileList tr')]
       .find(r => r.innerHTML.includes(`toggleShare(${id}`))
+
     if (row) {
       const statusCell = row.children[3]
       const actionCell = row.children[4]
+
       if (endpoint === 'make_public') {
         statusCell.innerHTML = `<span class="text-green-600">Công khai</span>`
         actionCell.children[0].innerText = 'Tắt chia sẻ'
         actionCell.children[0].setAttribute('onclick', `toggleShare(${id}, true)`)
+
+        addPublicLinkRow(row, data.public_url)
+
       } else {
         statusCell.innerHTML = `<span class="text-gray-500">Riêng tư</span>`
         actionCell.children[0].innerText = 'Chia sẻ'
         actionCell.children[0].setAttribute('onclick', `toggleShare(${id}, false)`)
+        removePublicLinkRow(row)
       }
     }
 
@@ -132,6 +163,7 @@ async function toggleShare(id, isPublic) {
     showToast(err.message, 'error')
   }
 }
+
 
 
 document.getElementById('searchFile').addEventListener('input', (e) => {
