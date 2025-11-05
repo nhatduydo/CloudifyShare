@@ -39,7 +39,6 @@ Xây dựng hệ thống nhắn tin, gởi nhận, chia sẻ dữ liệu trên n
 
 
     <!-- tạo firebase nhatduy096@gmail.com -->
-    link: https://cloudifyshare-default-rtdb.asia-southeast1.firebasedatabase.app/
     
     <!-- tạo nơi lưu trữ file aws cloud - S3 -->
 
