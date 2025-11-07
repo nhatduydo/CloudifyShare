@@ -104,7 +104,7 @@ BƯỚC 3: Tạo EC2 Launch Template (Flask App)
 
 Cấu hình:
     Quick Start
-    AMI: Ubuntu Server 24.04 LTS (Free tier eligible)
+    AMI: Ubuntu Server 22.04 LTS (Free tier eligible)
     Instance type: t2.micro
     Key pair: cloudify-key.pem (tạo mới nếu chưa có)
     Network: Không chọn subnet
@@ -126,7 +126,6 @@ Trong ô User data, dán đoạn script sau để EC2 tự cài app Flask khi kh
 ```
 #!/bin/bash
 # CloudifyShare Auto Deploy Script (Ubuntu 22.04 - Stable)
-
 set -e
 
 # 1. Update system and install dependencies
@@ -145,6 +144,11 @@ pip install -r requirements.txt
 
 # 4. Define log file
 LOGFILE="/home/ubuntu/app.log"
+touch $LOGFILE
+chown ubuntu:ubuntu $LOGFILE
+chmod 666 $LOGFILE
+
+echo ">>> CloudifyShare auto-deploy started at $(date)" >> $LOGFILE
 
 # 5. Stop old Flask process if running
 pkill -f "python3 run.py" || true
@@ -153,12 +157,12 @@ pkill -f "python3 run.py" || true
 chown -R ubuntu:ubuntu /home/ubuntu/CloudifyShare
 chmod -R 755 /home/ubuntu/CloudifyShare
 
-# 7. Add cron job to auto start Flask on reboot
-croncmd="@reboot cd /home/ubuntu/CloudifyShare && nohup python3 run.py --host=0.0.0.0 --port=5000 > $LOGFILE 2>&1 &"
+# 7. Add cron job to auto start Flask on reboot (run as root)
+croncmd="@reboot cd /home/ubuntu/CloudifyShare && nohup python3 run.py --host=0.0.0.0 --port=80 > $LOGFILE 2>&1 &"
 (crontab -l 2>/dev/null | grep -F "$croncmd") || (crontab -l 2>/dev/null; echo "$croncmd") | crontab -
 
-# 8. Start Flask app immediately
-nohup python3 run.py --host=0.0.0.0 --port=5000 > $LOGFILE 2>&1 &
+# 8. Start Flask app immediately (run as root)
+nohup python3 run.py --host=0.0.0.0 --port=80 > $LOGFILE 2>&1 &
 
 ```
 ```
@@ -193,7 +197,7 @@ Nếu thấy python3 run.py đang chạy → script hoạt động tốt
 
 #### Integrate with other services - optional - Load balancing 
 - Select Load balancing options: Attach to a new load balancer
-- Load balancer type: Application Load Balancer (ALB)
+- Load balancer type: Application Load Balancer (ALB) (HTTP, HTTPS)
 - Load balancer name: asg-flask-lb
 - Load balancer scheme: Internet-facing
 - Availability Zones and subnets: Chọn 2 public subnets
@@ -236,10 +240,63 @@ Instance maintenance policy
 ==> Create Auto Scaling group
 
 ### kiểm tra hoạt động thực tế của hệ thống
+Sau khi nhấn Create và đợi vài phút (~3-5 phút):
+    Vào EC2 → Auto Scaling Groups → Instance management → kiểm tra Health = Healthy.
+    Vào EC2 → Load Balancers → cloudify-lb → copy DNS name → dán vào trình duyệt.
+
+
 - AWS Console → EC2 → Load Balancers
 - Chọn Application Load Balancer bạn đã tạo
 - Chuyển sang tab “instance management” bạn sẽ thấy dòng: 
     Kiểm tra Status = running và Health = healthy.
+
+## 4.2 tạo bastion kiểm tra lỗi
+BƯỚC 1: Tạo Bastion Host EC2 (Public Subnet)
+Vào AWS Console → EC2 → Launch instance
+    Name: bastion-host
+    AMI: Ubuntu Server 22.04 LTS
+    Instance type: t2.micro (Free tier đủ dùng)
+    Key pair: Dùng lại cloudify-key.pem
+    Network settings:
+    VPC: cloudify-vpc
+    Subnet: cloudify-subnet-public1-us-east-1a
+    Auto-assign public IP: Enable
+    Security group: Chọn sg-bastion
+
+BƯỚC 2: Kiểm tra routing
+    Bastion nằm trong public subnet, nên route table của subnet đó phải có:
+    0.0.0.0/0 → igw-xxxxxxxx (Internet Gateway)
+
+BƯỚC 3: Cho phép Bastion SSH vào EC2 Flask
+    Chỉnh Security Group của EC2 Flask (sg-ec2):
+    Vào EC2 → Security Groups → sg-ec2
+    Chọn Edit inbound rules
+    Thêm rule:
+        Type: SSH
+        Port: 22
+        Source: sg-bastion
+
+BƯỚC 4: Kết nối SSH
+    Khi instance Bastion đã chạy, thực hiện:
+        ssh -i "cloudify-key.pem" ubuntu@<BASTION_PUBLIC_IP>
+        ssh -i "cloudify.pem" ubuntu@ec2-3-232-78-27.compute-1.amazonaws.com
+    Sau khi vào Bastion:
+        copy file .pem từ máy cá nhân vào bastion
+            scp -i "cloudify.pem" cloudify.pem ubuntu@<BASTION_PUBLIC_IP>:/home/ubuntu/
+            chmod 400 cloudify.pem
+
+        ssh -i "cloudify-key.pem" ubuntu@<PRIVATE_IP_OF_FLASK_EC2>
+        ssh -i "cloudify.pem" ubuntu@10.0.129.44
+
+    Kiểm tra Flask có đang chạy không
+        ps aux | grep python3
+
+
+Kết quả mong muốn:
+    Bạn SSH vào Bastion bằng public IP
+    Từ Bastion SSH nội bộ vào EC2 Flask bằng private IP
+    Sau đó bạn có thể xem log Flask hoặc chạy lệnh kiểm tra app.
+
 
 ## BƯỚC 5: Tạo Application Load Balancer (ALB)
 - EC2 → Load Balancer → Create
