@@ -1,5 +1,4 @@
 # 1. Mục tiêu tổng quát
-Hệ thống CloudifyShare được triển khai trên kiến trúc AWS theo mô hình High Availability (HA), bao gồm các thành phần chính:
 - VPC có 2 Availability Zones (AZ), chia thành các subnet public và private.
 - Application Load Balancer (ALB) phân phối yêu cầu đến các EC2 Flask App nằm trong Auto Scaling Group.
 - RDS MySQL hoạt động ở chế độ Multi-AZ (Primary và Replica).
@@ -9,107 +8,86 @@ Hệ thống CloudifyShare được triển khai trên kiến trúc AWS theo mô
 - CloudWatch giám sát tài nguyên và AWS Backup sao lưu dữ liệu định kỳ.
 
 # 2. Tạo VPC và Subnet
-
 Truy cập AWS Console → VPC → Create VPC.
 Chọn kiểu "VPC and more" và cấu hình như sau:
 
-Name: cloudify-vpc
-
-IPv4 CIDR: 10.0.0.0/16
-
-Tenancy: Default
-
-Availability Zones: 2
-
-Number of public subnets: 2
-
-Number of private subnets: 2
-
-NAT Gateway: 1 per AZ
-
-DNS hostnames: Enable
-
-DNS resolution: Enable
+Name:                         cloudify-vpc
+IPv4 CIDR:                    10.0.0.0/16
+Tenancy:                      Default
+Availability Zones:           2
+Number of public subnets:     2
+Number of private subnets:    2
+NAT Gateway:                  1 per AZ
+DNS hostnames:                Enable
+DNS resolution:               Enable
 
 Sau khi tạo, hệ thống sẽ có:
-
 2 public subnet (chứa ALB, NAT Gateway và Bastion Host).
-
 2 private subnet (chứa EC2 Flask App, RDS, MinIO).
-
 1 Internet Gateway (IGW).
-
 2 NAT Gateway (mỗi AZ một NAT).
 
-3. Tạo Security Groups
+# 3. Tạo Security Groups
 
 Tạo 4 nhóm bảo mật chính:
+  sg-lb: Cho Load Balancer (HTTP/HTTPS từ Internet).
+  sg-ec2: Cho EC2 Flask App.
+  sg-rds: Cho RDS MySQL.
+  sg-bastion: Cho phép SSH từ máy quản trị.
 
-sg-lb: Cho Load Balancer (HTTP/HTTPS từ Internet).
-
-sg-ec2: Cho EC2 Flask App.
-
-sg-rds: Cho RDS MySQL.
-
-sg-bastion: Cho phép SSH từ máy quản trị.
-
-3.1 sg-lb (Load Balancer)
-
-Mục đích: cho phép người dùng ngoài Internet truy cập vào hệ thống qua HTTP/HTTPS.
-
+## 3.1 sg-lb (Load Balancer)
+Mục đích: cho phép người dùng ngoài Internet truy cập vào hệ thống qua HTTP/HTTPS qua Route 53
 Inbound rules:
-
-HTTP – TCP – Port 80 – Source 0.0.0.0/0
-
-HTTPS – TCP – Port 443 – Source 0.0.0.0/0
-
-ICMP – Allow all
-
+Type	   Protocol	    Port	       Source	          Mục đích
+HTTP  	  TCP	        80	          0.0.0.0/0	      Cho phép truy cập HTTP từ Internet
+HTTPS	    TCP	        443	          0.0.0.0/0	      Cho phép truy cập HTTPS từ Internet
+ICMP      All	        -	            0.0.0.0/0	      Ping test (tuỳ chọn)
 Outbound rules: giữ mặc định (All traffic).
-
 Luồng: Người dùng → Route 53 → ALB qua port 80/443.
 
-3.2 sg-ec2 (Flask App)
-
+## 3.2 sg-ec2 (Flask App)
 Mục đích: cho phép ALB truy cập Flask app và Bastion SSH vào.
-
 Inbound rules:
-
-HTTP – TCP – Port 80 – Source sg-lb
-
-SSH – TCP – Port 22 – Source sg-bastion
-
-ICMP – Allow all
-
+  Type	      Protocol	      Port	      Source	      Ghi chú
+  HTTP	        TCP	          80	        sg-lb	        Chỉ ALB được phép truy cập Flask
+  SSH	          TCP	          22	        sg-bastion	  Cho phép Bastion Host SSH vào
+  ICMP	        All	          All	        0.0.0.0/0	    Ping nội bộ kiểm tra
 Outbound rules: giữ mặc định (All traffic).
 Luồng: ALB → EC2 Flask App.
 Flask chỉ nhận truy cập từ ALB và SSH từ Bastion.
 
-3.3 sg-rds (RDS MySQL)
-
+## 3.3 sg-rds (RDS MySQL)
 Mục đích: chỉ cho EC2 Flask được phép kết nối cơ sở dữ liệu.
-
 Inbound rules:
-
-MySQL/Aurora – TCP – Port 3306 – Source sg-ec2
+  Type	        Protocol	      Port	      Source	          Ghi chú
+  MySQL/Aurora	  TCP	          3306	      sg-ec2-flask	    Chỉ Flask App được kết nối DB
 
 Outbound rules: giữ mặc định.
 Luồng: EC2 Flask → RDS MySQL (port 3306).
 
-3.4 sg-bastion (Bastion Host)
-
+## 3.4 sg-bastion (Bastion Host)
 Mục đích: cho phép máy quản trị SSH vào hệ thống.
-
 Inbound rules:
-
-SSH – TCP – Port 22 – Source IP cá nhân (ví dụ 113.x.x.x/32)
-
-ICMP – Allow all
+  Type	      Protocol	        Port	        Source	            Ghi chú
+  SSH	          TCP	            22	         <IP máy bạn>/32	    Chỉ IP cá nhân của bạn được SSH
+  ICMP	        All	            All	          0.0.0.0/0	          Ping test (tùy chọn)
 
 Outbound rules: giữ mặc định.
 Luồng: Máy quản trị → Bastion (Public IP) → EC2 Flask (Private IP).
 
-4. Tạo EC2 Flask App (Launch Template)
+## 3.5 sg-minio (MinIO Storage)
+Mục đích:
+Cho phép EC2 Flask App truy cập dịch vụ MinIO nội bộ để đọc/ghi file qua API và Console.
+Không mở public Internet để đảm bảo bảo mật dữ liệu người dùng.
+
+Inbound rules:
+  Type	      Protocol	      Port	      Source	      Mục đích
+  Custom TCP	  TCP	          9000	      sg-ec2	      Flask App gọi API upload/download
+  Custom TCP	  TCP	          9001	      sg-ec2	      Flask App hoặc quản trị truy cập console
+  ICMP	All	-	0.0.0.0/0	Ping test (tuỳ chọn)
+Outbound rules: giữ mặc định.
+
+# 4. Tạo EC2 Flask App (Launch Template)
 
 Truy cập EC2 → Launch Templates → Create Launch Template.
 

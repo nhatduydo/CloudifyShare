@@ -374,10 +374,7 @@ Sau khi tạo xong:
 - Bỏ chọn Auto-Scaling-group-flask-LB.
 - Thay vào đó, chọn tg-flask.
 - Nhấn Update.
-BƯỚC 6: Tạo RDS MySQL (ở AWS Thật)
-
-Đăng nhập vào tài khoản AWS thật (không phải AWS Academy).
-
+BƯỚC 6: Tạo RDS MySQL 
 Vào RDS → Create Database
 
 Chọn Standard create
@@ -416,7 +413,7 @@ Disable autoscaling (để tránh phát sinh chi phí).
 
 Connectivity
 
-VPC: chọn VPC ở AWS thật (không trùng với VPC trong AWS Academy).
+VPC: chọn VPC.
 
 Public access: Yes (Publicly accessible) để cho phép EC2 trong AWS Academy truy cập qua Internet.
 
@@ -452,9 +449,9 @@ DB_NAME=cloudsharedb
 
 Kết nối này hoạt động bình thường vì RDS thật có IP public và EC2 (Academy) có outbound Internet thông qua NAT Gateway.
 
-BƯỚC 7: Tạo S3 Buckets (ở AWS Thật)
+BƯỚC 7: Tạo S3 Buckets
 
-Đăng nhập tài khoản AWS thật.
+Đăng nhập tài khoản
 
 Vào S3 → Create bucket
 
@@ -493,7 +490,7 @@ AWS_SECRET_ACCESS_KEY=<SecretKey của tài khoản thật>
 
 Trong Flask code, upload file chỉ cần gọi tới S3_MAIN_BUCKET, AWS sẽ tự sao chép sang bucket backup nhờ replication.
 
-BƯỚC 8: Cấu hình kết nối giữa AWS Academy và AWS thật
+
 1. Kiểm tra outbound Internet của EC2 trong AWS Academy
 
 EC2 trong private subnet sử dụng NAT Gateway để ra ngoài.
@@ -533,7 +530,7 @@ s3 = boto3.client(
 s3.upload_file("test.txt", os.getenv('S3_MAIN_BUCKET'), "test.txt")
 
 
-Sau đó kiểm tra trên AWS thật → file có trong cả hai bucket.
+Sau đó kiểm tra trên AWS → file có trong cả hai bucket.
 
 BƯỚC 9: Thiết lập CloudWatch Monitoring (AWS Academy)
 
@@ -588,5 +585,5 @@ Khi truy cập https://app.cloudifyshare.website → Flask app chạy qua Load B
 KẾT QUẢ TỔNG THỂ
 Thành phần	Nơi triển khai	Vai trò
 VPC, EC2, ALB, Auto Scaling, Bastion, CloudWatch, Backup	AWS Academy	Compute và điều phối ứng dụng
-RDS MySQL	AWS thật	Lưu trữ dữ liệu chính, có IP public
-S3 (2 buckets, replication)	AWS thật	Lưu trữ file và sao lưu tự động
+RDS MySQL	Lưu trữ dữ liệu chính, có IP public
+S3 (2 buckets, replication)Lưu trữ file và sao lưu tự động
