@@ -238,6 +238,83 @@ DB_NAME=cloudsharedb
 
 Cài đặt MinIO trong private subnet (hoặc EC2 riêng).
 
+```
+#!/bin/bash
+set -e
+
+# Update hệ thống và cài công cụ cần thiết
+apt update -y
+apt install -y wget curl ufw
+
+# Cài MinIO server
+wget https://dl.min.io/server/minio/release/linux-amd64/minio -O /usr/local/bin/minio
+chmod +x /usr/local/bin/minio
+
+# Tạo thư mục lưu dữ liệu
+mkdir -p /data
+chown ubuntu:ubuntu /data
+
+# Thông tin cấu hình
+MINIO_USER="admin"
+MINIO_PASS="admin123"
+BUCKET_MAIN="cloudifyshare-bucket"
+BUCKET_BACKUP="cloudifyshare-backup"
+
+echo "MINIO_ROOT_USER=${MINIO_USER}" >> /etc/environment
+echo "MINIO_ROOT_PASSWORD=${MINIO_PASS}" >> /etc/environment
+export MINIO_ROOT_USER=${MINIO_USER}
+export MINIO_ROOT_PASSWORD=${MINIO_PASS}
+
+# Tạo service cho MinIO
+cat <<EOF > /etc/systemd/system/minio.service
+[Unit]
+Description=MinIO Object Storage
+After=network.target
+
+[Service]
+User=ubuntu
+Group=ubuntu
+Environment="MINIO_ROOT_USER=${MINIO_USER}"
+Environment="MINIO_ROOT_PASSWORD=${MINIO_PASS}"
+ExecStart=/usr/local/bin/minio server /data --address "0.0.0.0:9000" --console-address "0.0.0.0:9001"
+Restart=always
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Mở port cơ bản
+ufw allow 22/tcp
+ufw allow 9000/tcp
+ufw allow 9001/tcp
+ufw --force enable
+
+# Khởi động dịch vụ MinIO
+systemctl daemon-reload
+systemctl enable minio
+systemctl start minio
+
+# Cài MinIO Client (mc)
+wget https://dl.min.io/client/mc/release/linux-amd64/mc -O /usr/local/bin/mc
+chmod +x /usr/local/bin/mc
+
+# Chờ MinIO chạy ổn định
+sleep 10
+
+# Kết nối client tới MinIO nội bộ
+mc alias set local http://127.0.0.1:9000 ${MINIO_USER} ${MINIO_PASS}
+
+# Tạo 2 bucket nếu chưa có
+mc mb local/${BUCKET_MAIN} || true
+mc mb local/${BUCKET_BACKUP} || true
+
+# Đặt quyền private
+mc anonymous set private local/${BUCKET_MAIN}
+mc anonymous set private local/${BUCKET_BACKUP}
+```
+
+
 Lệnh cài đặt:
 ```
 docker run -d -p 9000:9000 -p 9001:9001 \

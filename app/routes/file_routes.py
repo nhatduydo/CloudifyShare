@@ -138,7 +138,10 @@ def download_file(file_id):
         presigned_url = minio_client.presigned_get_object(
             MINIO_BUCKET,
             file.filename,
-            expires=timedelta(days=7)
+            expires=timedelta(days=7),
+            response_headers={
+                "response-content-disposition": f'attachment; filename="{file.filename}"'
+            }
         )
         return jsonify({
             "message": "Tạo link tải thành công (hết hạn sau 7 ngày)",
