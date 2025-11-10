@@ -11,7 +11,7 @@
 Truy cập AWS Console → VPC → Create VPC.
 Chọn kiểu "VPC and more" và cấu hình như sau:
 
-Name:                         cloudify-vpc
+Name:                         cloudify
 IPv4 CIDR:                    10.0.0.0/16
 Tenancy:                      Default
 Availability Zones:           2
@@ -28,12 +28,12 @@ Sau khi tạo, hệ thống sẽ có:
 2 NAT Gateway (mỗi AZ một NAT).
 
 # 3. Tạo Security Groups
-
-Tạo 4 nhóm bảo mật chính:
+Tạo 5 nhóm bảo mật chính:
   sg-lb: Cho Load Balancer (HTTP/HTTPS từ Internet).
   sg-ec2: Cho EC2 Flask App.
   sg-rds: Cho RDS MySQL.
   sg-bastion: Cho phép SSH từ máy quản trị.
+  sg-minio
 
 ## 3.1 sg-lb (Load Balancer)
 Mục đích: cho phép người dùng ngoài Internet truy cập vào hệ thống qua HTTP/HTTPS qua Route 53
@@ -88,78 +88,161 @@ Inbound rules:
 Outbound rules: giữ mặc định.
 
 # 4. Tạo EC2 Flask App (Launch Template)
-
-Truy cập EC2 → Launch Templates → Create Launch Template.
+#### Bước 1 — Mở Launch Template
+- EC2 → Launch Template → Create Launch Template
+BƯỚC 3: Tạo EC2 Launch Template (Flask App)
+    Mục	                            Giá trị
+    Name	                        flask-template
+    Description	                    Template for Flask EC2 instances
+    Auto Scaling guidance	        Enabled
 
 Cấu hình:
+    Quick Start
+    AMI: Ubuntu Server 22.04 LTS (Free tier eligible)
+    Instance type: t2.micro
+    Key pair: cloudify-key.pem (tạo mới nếu chưa có)
+    Network: Không chọn subnet
+    Auto-assign public IP: Disable (vì ở private subnet)
+    Availability Zone: Để trống	Auto chọn
+    Security group: sg-ec2
+    Volume: 8 GiB gp3
+    Tag: Project=CloudifyShare
 
-Name: flask-template
+#### Bước 2 - Advanced network configuration
+- Subnet: Remove subnet (nếu còn hiện dòng đỏ)	Không được chọn subnet cho Auto Scaling
+- Security groups: sg-ec2-flask
+- Auto-assign public IP: Disable	Vì EC2 Flask nằm trong private subnet, không có IP public
+Các phần khác (Primary IP, IPv6, Prefixes, Description, …)	Để mặc định (Don't include)	Không cần chỉnh
 
-AMI: Ubuntu Server 22.04 LTS
+#### Bước 3 — Advanced details → User data (rất quan trọng)
+Trong ô User data, dán đoạn script sau để EC2 tự cài app Flask khi khởi động:
 
-Instance type: t2.micro
-
-Key pair: cloudify-key.pem
-
-Network: không chọn subnet
-
-Auto-assign public IP: Disable
-
-Security group: sg-ec2
-
-Storage: 8 GB gp3
-
-Tag: Project=CloudifyShare
-
-Trong phần “User data”, thêm script khởi tạo Flask tự động:
 ```
 #!/bin/bash
+# CloudifyShare Auto Deploy Script (Ubuntu 22.04 - Stable)
 set -e
+
+# 1. Update system and install dependencies
 apt update -y
 apt install -y python3 python3-pip git
 
+# 2. Clone project from GitHub (branch main)
 cd /home/ubuntu
 if [ ! -d "CloudifyShare" ]; then
   git clone -b main https://github.com/nhatduydo/CloudifyShare.git
 fi
 cd CloudifyShare
+
+# 3. Install Python dependencies
 pip install -r requirements.txt
 
+# 4. Define log file
 LOGFILE="/home/ubuntu/app.log"
 touch $LOGFILE
+chown ubuntu:ubuntu $LOGFILE
 chmod 666 $LOGFILE
 
+echo ">>> CloudifyShare auto-deploy started at $(date)" >> $LOGFILE
+
+# 5. Stop old Flask process if running
 pkill -f "python3 run.py" || true
+
+# 6. Fix permissions
+chown -R ubuntu:ubuntu /home/ubuntu/CloudifyShare
+chmod -R 755 /home/ubuntu/CloudifyShare
+
+# 7. Add cron job to auto start Flask on reboot (run as root)
+croncmd="@reboot cd /home/ubuntu/CloudifyShare && nohup python3 run.py --host=0.0.0.0 --port=80 > $LOGFILE 2>&1 &"
+(crontab -l 2>/dev/null | grep -F "$croncmd") || (crontab -l 2>/dev/null; echo "$croncmd") | crontab -
+
+# 8. Start Flask app immediately (run as root)
 nohup python3 run.py --host=0.0.0.0 --port=80 > $LOGFILE 2>&1 &
 
 ```
-5. Tạo Auto Scaling Group
+```
+EC2 cài Python, pip, git
+Clone repo CloudifyShare (nhánh main)
+Cài thư viện Flask
+Tự động thêm crontab để Flask chạy lại sau mỗi lần reboot
+Chạy Flask ngay lần đầu EC2 khởi động
+```
+### Bước 4 — Review & Create
+Nhấn Create launch template
+→ AWS sẽ tạo mẫu máy chủ EC2 Flask của bạn.
 
-EC2 → Auto Scaling Groups → Create.
+Bạn có thể kiểm tra bằng cách:
+- Vào EC2 → Launch Template → flask-template → Launch instance from template
+- Chạy thử 1 máy để kiểm tra:
+    Khi khởi động xong → SSH vào máy
+Dùng lệnh:
+    ps aux | grep python
+Nếu thấy python3 run.py đang chạy → script hoạt động tốt 
 
-Name: asg-flask
+# 5. Tạo Auto Scaling Group
+- EC2 → Auto Scaling Groups → Create
+- Name: asg-flask
+- Launch template: flask-template
+- Version: default(1)
+- VPC: cloudify-vpc
+- Availability Zones and subnets: private1 và private2
+- Balanced best effort
 
-Launch template: flask-template
+#### Integrate with other services - optional - Load balancing 
+- Select Load balancing options: Attach to a new load balancer
+- Load balancer type: Application Load Balancer (ALB) (HTTP, HTTPS)
+- Load balancer name: asg-flask-lb
+- Load balancer scheme: Internet-facing
+- Availability Zones and subnets: Chọn 2 public subnets
+- Listeners and routing: Protocol: HTTP - Port: 80
+- Default routing (target group): Create a target group
 
-VPC: cloudify-vpc
+#### Health Checks:
+EC2 health checks: Enabled
+ELB health checks: Enabled
+Health check grace period: 300 giây
 
-Subnets: 2 private subnet
+#### VPC Lattice integration options
+- Select VPC Lattice service to attach: No VPC Lattice service
+- Application Recovery Controller (ARC) zonal shift: không tick
+Health checks
+- EC2 health checks: Always enabled
+- Turn on Elastic Load Balancing health checks: Bật
+- Turn on Amazon EBS health checks: Không bật
+- Health check grace period: 300
 
-Load Balancer: Application Load Balancer (cloudify-lb)
+#### Tag (optional)
+Key: Project
+Value: CloudifyShare
 
-Health check: ELB + EC2
+### CONFIGURE GROUP SIZE AND SCALING
+- Desired capacity: 2
+- Minimum capacity: 1
+- Maximum capacity: 3
+- Choose whether to use a target tracking policy: Target tracking scaling policy
+- Metric type: Average CPU utilization
+- Target value: 60
+Instance maintenance policy
+- chọn: Launch before terminating
+- Capacity Reservation preference: Default
+- Enable instance scale-in protection: Không bật
+- Enable group metrics collection within CloudWatch: Bật
+- Enable default instance warmu:p Bật, 180 seconds
 
-Desired capacity: 2
+- Add tags: Project = CloudifyShare
+==> Create Auto Scaling group
 
-Min: 1
+### kiểm tra hoạt động thực tế của hệ thống
+Sau khi nhấn Create và đợi vài phút (~3-5 phút):
+    Vào EC2 → Auto Scaling Groups → Instance management → kiểm tra Health = Healthy.
+    Vào EC2 → Load Balancers → cloudify-lb → copy DNS name → dán vào trình duyệt.
 
-Max: 3
 
-Scaling policy: Target tracking – 60% CPU
+- AWS Console → EC2 → Load Balancers
+- Chọn Application Load Balancer bạn đã tạo
+- Chuyển sang tab “instance management” bạn sẽ thấy dòng: 
+    Kiểm tra Status = running và Health = healthy.
 
-CloudWatch sẽ theo dõi CPU để tự động scale in/out.
-
-6. Tạo Bastion Host
+# 6. Tạo Bastion Host
 
 EC2 → Launch Instance.
 

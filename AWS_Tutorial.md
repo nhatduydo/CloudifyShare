@@ -114,13 +114,13 @@ Cấu hình:
     Volume: 8 GiB gp3
     Tag: Project=CloudifyShare
 
-#### Bước 6 - Advanced network configuration
+#### Bước 2 - Advanced network configuration
 - Subnet: Remove subnet (nếu còn hiện dòng đỏ)	Không được chọn subnet cho Auto Scaling
 - Security groups: sg-ec2-flask
 - Auto-assign public IP: Disable	Vì EC2 Flask nằm trong private subnet, không có IP public
 Các phần khác (Primary IP, IPv6, Prefixes, Description, …)	Để mặc định (Don't include)	Không cần chỉnh
 
-#### Bước 8 — Advanced details → User data (rất quan trọng)
+#### Bước 3 — Advanced details → User data (rất quan trọng)
 Trong ô User data, dán đoạn script sau để EC2 tự cài app Flask khi khởi động:
 
 ```
