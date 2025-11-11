@@ -243,38 +243,56 @@ Sau khi nhấn Create và đợi vài phút (~3-5 phút):
     Kiểm tra Status = running và Health = healthy.
 
 # 6. Tạo Bastion Host
+### tạo bastion public
+#### BƯỚC 1: Tạo Bastion Host EC2 (Public Subnet)
+Vào AWS Console → EC2 → Launch instance
+    Name: bastion-host
+    AMI: Ubuntu Server 22.04 LTS
+    Instance type: t2.micro (Free tier đủ dùng)
+    Key pair: Dùng lại cloudify-key.pem
+    Network settings:
+    VPC: cloudify-vpc
+    Subnet: cloudify-subnet-public1-us-east-1a
+    Auto-assign public IP: Enable
+    Security group: Chọn sg-bastion
 
-EC2 → Launch Instance.
+#### BƯỚC 2: Kiểm tra routing
+    Bastion nằm trong public subnet, nên route table của subnet đó phải có:
+    0.0.0.0/0 → igw-xxxxxxxx (Internet Gateway)
 
-Name: bastion-host
+#### BƯỚC 3: Cho phép Bastion SSH vào EC2 Flask
+    Chỉnh Security Group của EC2 Flask (sg-ec2):
+    Vào EC2 → Security Groups → sg-ec2
+    Chọn Edit inbound rules
+    Thêm rule:
+        Type: SSH
+        Port: 22
+        Source: sg-bastion
 
-AMI: Ubuntu 22.04 LTS
+#### BƯỚC 4: Kết nối SSH
+    Khi instance Bastion đã chạy, thực hiện:
+        ssh -i "cloudify-key.pem" ubuntu@<BASTION_PUBLIC_IP>
+        ssh -i "cloudify.pem" ubuntu@ec2-3-232-78-27.compute-1.amazonaws.com
+    Sau khi vào Bastion:
+        copy file .pem từ máy cá nhân vào bastion
+            scp -i "C:\Users\nhatduy\Downloads\cloudify.pem" "C:\Users\nhatduy\Downloads\cloudify.pem" ubuntu@3.81.22.55:/home/ubuntu/
+            scp -i "cloudify.pem" cloudify.pem ubuntu@<BASTION_PUBLIC_IP>:/home/ubuntu/
+            chmod 400 cloudify.pem
 
-Instance type: t2.micro
+        ssh -i "cloudify-key.pem" ubuntu@<PRIVATE_IP_OF_FLASK_EC2>
+        ssh -i "cloudify.pem" ubuntu@10.0.129.44
 
-Key pair: cloudify-key.pem
+    Kiểm tra Flask có đang chạy không
+        ps aux | grep python3
 
-Subnet: Public subnet
+Kết quả mong muốn:
+    Bạn SSH vào Bastion bằng public IP
+    Từ Bastion SSH nội bộ vào EC2 Flask bằng private IP
+    Sau đó bạn có thể xem log Flask hoặc chạy lệnh kiểm tra app.
 
-Auto-assign public IP: Enable
+### tạo bastion private
 
-Security group: sg-bastion
-
-Kiểm tra route table của public subnet:
-0.0.0.0/0 → Internet Gateway.
-
-Kết nối SSH hai lớp:
-
-Bước 1: SSH vào Bastion
-```
-ssh -i "cloudify-key.pem" ubuntu@<bastion_public_ip>
-```
-Bước 2: Từ Bastion SSH vào EC2 Flask (Private Subnet)
-```
-ssh -i "cloudify-key.pem" ubuntu@<private_ip_of_ec2_flask>
-```
-7. Tạo RDS MySQL (trong AWS Academy)
-
+# 7. Tạo RDS MySQL (trong AWS Academy)
 RDS → Create Database → Standard create.
 
 Thuộc tính	Giá trị
@@ -295,96 +313,39 @@ DB_USER=admin
 DB_PASS=Admin123!
 DB_NAME=cloudsharedb
 ```
-8. Cấu hình MinIO (thay thế S3)
-
+# 8. Cấu hình MinIO (thay thế S3)
 Cài đặt MinIO trong private subnet (hoặc EC2 riêng).
 
-```
-#!/bin/bash
-set -e
+## hướng dẫn public - test
+Tạo 1 instance mới:
+Có thể truy cập web http://<public-ip>:9001
 
-# Update hệ thống và cài công cụ cần thiết
-apt update -y
-apt install -y wget curl ufw
+### BƯỚC 1: Mở AWS Console → EC2 → Launch instance
+Mục	Giá trị đề xuất
+Name	            minio-public
+AMI	              Ubuntu Server 22.04 LTS
+Instance type	    t3.micro (hoặc t2.micro)
+Key pair	        Chọn key bạn đã có (ví dụ: cloudify.pem)
 
-# Cài MinIO server
-wget https://dl.min.io/server/minio/release/linux-amd64/minio -O /usr/local/bin/minio
-chmod +x /usr/local/bin/minio
+### BƯỚC 2: Cấu hình Network
 
-# Tạo thư mục lưu dữ liệu
-mkdir -p /data
-chown ubuntu:ubuntu /data
+VPC: cloudifyshare-vpc
+Subnet:Chọn subnet public: cloudifyshare-subnet-public1-us-east-1
+Auto-assign public IP: Enable 
+  → Đây là điểm quan trọng nhất để instance có Public IP.
 
-# Thông tin cấu hình
-MINIO_USER="admin"
-MINIO_PASS="admin123"
-BUCKET_MAIN="cloudifyshare-bucket"
-BUCKET_BACKUP="cloudifyshare-backup"
+### BƯỚC 3: Security Group
+Chọn Create new security group (hoặc chọn “Select existing” nếu đã có).
+ Nếu tạo mới:
+  Tên: sg-minio-public
+  Type	    Protocol	        Port    range	      Source	      Mục đích
+  SSH	        TCP	             22	    0.0.0.0/0	  Cho phép      SSH
+  Custom      TCP	            TCP	    9000	      0.0.0.0/0	    API MinIO
+  Custom      TCP	            TCP	    9001	      0.0.0.0/0	    Giao diện MinIO
 
-echo "MINIO_ROOT_USER=${MINIO_USER}" >> /etc/environment
-echo "MINIO_ROOT_PASSWORD=${MINIO_PASS}" >> /etc/environment
-export MINIO_ROOT_USER=${MINIO_USER}
-export MINIO_ROOT_PASSWORD=${MINIO_PASS}
+### BƯỚC 4: User Data Script
+ Advanced details →  User data → Dán script
 
-# Tạo service cho MinIO
-cat <<EOF > /etc/systemd/system/minio.service
-[Unit]
-Description=MinIO Object Storage
-After=network.target
-
-[Service]
-User=ubuntu
-Group=ubuntu
-Environment="MINIO_ROOT_USER=${MINIO_USER}"
-Environment="MINIO_ROOT_PASSWORD=${MINIO_PASS}"
-ExecStart=/usr/local/bin/minio server /data --address "0.0.0.0:9000" --console-address "0.0.0.0:9001"
-Restart=always
-LimitNOFILE=65536
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Mở port cơ bản
-ufw allow 22/tcp
-ufw allow 9000/tcp
-ufw allow 9001/tcp
-ufw --force enable
-
-# Khởi động dịch vụ MinIO
-systemctl daemon-reload
-systemctl enable minio
-systemctl start minio
-
-# Cài MinIO Client (mc)
-wget https://dl.min.io/client/mc/release/linux-amd64/mc -O /usr/local/bin/mc
-chmod +x /usr/local/bin/mc
-
-# Chờ MinIO chạy ổn định
-sleep 10
-
-# Kết nối client tới MinIO nội bộ
-mc alias set local http://127.0.0.1:9000 ${MINIO_USER} ${MINIO_PASS}
-
-# Tạo 2 bucket nếu chưa có
-mc mb local/${BUCKET_MAIN} || true
-mc mb local/${BUCKET_BACKUP} || true
-
-# Đặt quyền private
-mc anonymous set private local/${BUCKET_MAIN}
-mc anonymous set private local/${BUCKET_BACKUP}
-```
-
-
-Lệnh cài đặt:
-```
-docker run -d -p 9000:9000 -p 9001:9001 \
-  -e MINIO_ROOT_USER=admin \
-  -e MINIO_ROOT_PASSWORD=Admin123! \
-  -v /data/minio:/data \
-  minio/minio server /data --console-address ":9001"
-
-```
 File .env của Flask:
 ```
 MINIO_ENDPOINT=http://10.0.1.25:9000
