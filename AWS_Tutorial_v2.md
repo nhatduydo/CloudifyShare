@@ -118,48 +118,6 @@ Các phần khác (Primary IP, IPv6, Prefixes, Description, …)	Để mặc đ�
 Trong ô User data, dán đoạn script sau để EC2 tự cài app Flask khi khởi động:
 
 ```
-#!/bin/bash
-# CloudifyShare Auto Deploy Script (Ubuntu 22.04 - Stable)
-set -e
-
-# 1. Update system and install dependencies
-apt update -y
-apt install -y python3 python3-pip git
-
-# 2. Clone project from GitHub (branch main)
-cd /home/ubuntu
-if [ ! -d "CloudifyShare" ]; then
-  git clone -b main https://github.com/nhatduydo/CloudifyShare.git
-fi
-cd CloudifyShare
-
-# 3. Install Python dependencies
-pip install -r requirements.txt
-
-# 4. Define log file
-LOGFILE="/home/ubuntu/app.log"
-touch $LOGFILE
-chown ubuntu:ubuntu $LOGFILE
-chmod 666 $LOGFILE
-
-echo ">>> CloudifyShare auto-deploy started at $(date)" >> $LOGFILE
-
-# 5. Stop old Flask process if running
-pkill -f "python3 run.py" || true
-
-# 6. Fix permissions
-chown -R ubuntu:ubuntu /home/ubuntu/CloudifyShare
-chmod -R 755 /home/ubuntu/CloudifyShare
-
-# 7. Add cron job to auto start Flask on reboot (run as root)
-croncmd="@reboot cd /home/ubuntu/CloudifyShare && nohup python3 run.py --host=0.0.0.0 --port=80 > $LOGFILE 2>&1 &"
-(crontab -l 2>/dev/null | grep -F "$croncmd") || (crontab -l 2>/dev/null; echo "$croncmd") | crontab -
-
-# 8. Start Flask app immediately (run as root)
-nohup python3 run.py --host=0.0.0.0 --port=80 > $LOGFILE 2>&1 &
-
-```
-```
 EC2 cài Python, pip, git
 Clone repo CloudifyShare (nhánh main)
 Cài thư viện Flask
@@ -182,13 +140,16 @@ Nếu thấy python3 run.py đang chạy → script hoạt động tốt
 - EC2 → Auto Scaling Groups → Create
 - Name: asg-flask
 - Launch template: flask-template
-- Version: default(1)
+- Version: Latest
 - VPC: cloudify-vpc
 - Availability Zones and subnets: private1 và private2
 - Balanced best effort
 
 #### Integrate with other services - optional - Load balancing 
-- Select Load balancing options: Attach to a new load balancer
+- Select Load balancing options: Attach to an existing load balancer
+- chọn tg-flask
+
+
 - Load balancer type: Application Load Balancer (ALB) (HTTP, HTTPS)
 - Load balancer name: asg-flask-lb
 - Load balancer scheme: Internet-facing
@@ -293,26 +254,67 @@ Kết quả mong muốn:
 ### tạo bastion private
 
 # 7. Tạo RDS MySQL (trong AWS Academy)
+
+## tạo DB Subnet Group
+
+### bước 1. Basic info
+RDS => Subnet groups → Create DB Subnet Group
+Field	                Value
+Name	                cloudify-db-subnet
+Description         	Subnet group for RDS in cloudify VPC
+VPC	                    cloudifyshare-vpc
+
+### bước 2. Add subnets
+CHỈ cần chọn private subnets
+Availability Zones            us-east-1a, us-esat-1b
+Subnets
+        cloudifyshare-subnet-private1-us-east-1a
+        cloudifyshare-subnet-private2-us-east-1b
+
+
+## tạo RDS - MySQL
+
 RDS → Create Database → Standard create.
 
-Thuộc tính	Giá trị
-Engine	MySQL 8.0
-DB identifier	cloudsharedb
-Master username	admin
-Password	Admin123!
-Multi-AZ	Enabled
-Public access	No
-VPC	cloudify-vpc
-Subnet group	Private subnet
-Security group	sg-rds
+Thuộc tính	                                        Giá trị
+Engine	                                            MySQL 8.0
+Show only versions that support Multi-AZ            Không
+Show only versions that support Optimized Writes    Không
+Enable RDS Extended Support                         Không
+DB identifier	                                    cloudsharedb
+Master username	                                    admin
+Credentials management                              Self managed
+Password	                                        Admin123
+Instance configuration                              Burstable classes
+Storage type                                        gp3
+
+
+Don’t connect to an EC2 compute resource
+Public access	                                    No
+VPC	                                                cloudify-vpc
+Subnet group	                                    Private subnet
+Security group	                                    sg-rds
+
+Availability Zone                  No preference
+RDS Proxy                          khoong tick
+Database authentication options    Password authentication
+
+Log exports
+        Enhanced Monitoring        x
+        Audit Log                  x
+        Error Log                  v
+        General Log                x
+        Slow Query Log             x
+        
 
 Flask cấu hình (.env):
 ```
 DB_HOST=<endpoint của RDS nội bộ>
 DB_USER=admin
-DB_PASS=Admin123!
+DB_PASS=admin123
 DB_NAME=cloudsharedb
 ```
+
 # 8. Cấu hình MinIO (thay thế S3)
 Cài đặt MinIO trong private subnet (hoặc EC2 riêng).
 
@@ -323,12 +325,11 @@ Có thể truy cập web http://<public-ip>:9001
 ### BƯỚC 1: Mở AWS Console → EC2 → Launch instance
 Mục	Giá trị đề xuất
 Name	            minio-public
-AMI	              Ubuntu Server 22.04 LTS
+AMI	                Ubuntu Server 22.04 LTS
 Instance type	    t3.micro (hoặc t2.micro)
 Key pair	        Chọn key bạn đã có (ví dụ: cloudify.pem)
 
 ### BƯỚC 2: Cấu hình Network
-
 VPC: cloudifyshare-vpc
 Subnet:Chọn subnet public: cloudifyshare-subnet-public1-us-east-1
 Auto-assign public IP: Enable 
@@ -357,15 +358,8 @@ Nếu có thêm MinIO backup ở AZ khác:
 ```
 MINIO_BACKUP_ENDPOINT=http://10.0.2.25:9000
 ```
-9. Firebase Realtime Messaging
 
-Firebase dùng cho chat và thông báo realtime.
-
-File .env:
-```
-FIREBASE_URL=https://cloudifyshare.firebaseio.com
-```
-10. CloudWatch Monitoring và AWS Backup
+# 10. CloudWatch Monitoring và AWS Backup
 
 CloudWatch:
 
@@ -383,7 +377,7 @@ Frequency: Daily
 
 Retention: 30 days
 
-11. Route 53 và Domain
+# 11. Route 53 và Domain
 
 Route 53 → Hosted Zones → Create Zone
 Domain: cloudifyshare.website
@@ -401,7 +395,7 @@ Truy cập: http://app.cloudifyshare.website
 Luồng truy cập:
 User → Route 53 → Internet Gateway → ALB → EC2 Flask (Private Subnet) → RDS MySQL → MinIO Storage.
 
-12. Kết quả tổng thể
+# 12. Kết quả tổng thể
 Thành phần	Nơi triển khai	Vai trò
 VPC, EC2, ALB, Auto Scaling, Bastion, CloudWatch, Backup	AWS Academy	Toàn bộ hệ thống ứng dụng
 RDS MySQL	AWS Academy (Private subnet)	Lưu trữ dữ liệu chính
@@ -409,7 +403,7 @@ MinIO (Main + Backup)	AWS Academy (Private subnet)	Lưu trữ và sao lưu file
 Firebase	Dịch vụ ngoài AWS	Gửi thông báo realtime
 Route 53 + Domain	AWS	Quản lý DNS truy cập web
 
-13. MÔ TẢ LUỒNG KẾT NỐI MẠNG HỆ THỐNG CLOUDIFYSHARE
+# 13. MÔ TẢ LUỒNG KẾT NỐI MẠNG HỆ THỐNG CLOUDIFYSHARE
 
 Hệ thống hoạt động trong một VPC (Virtual Private Cloud), được chia thành các public subnet và private subnet để tách biệt giữa các thành phần hướng Internet (public-facing) và nội bộ (internal-facing).
 Luồng truyền dữ liệu được chia thành ba loại chính: Inbound traffic, Outbound traffic, và Internal traffic.

@@ -16,6 +16,7 @@ MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
 MINIO_BUCKET = os.getenv("MINIO_BUCKET_NAME")
+MINIO_ENDPOINT_PUBLIC = os.getenv("MINIO_ENDPOINT_PUBLIC")
 
 minio_client = Minio(
     MINIO_ENDPOINT.replace("http://", "").replace("https://", ""),
@@ -53,7 +54,10 @@ def upload_file():
             content_type=file_obj.content_type
         )
 
-        file_url = f"{MINIO_ENDPOINT}/{MINIO_BUCKET}/{quote(file_obj.filename)}"
+        # nếu không đúng thì đổi qua cái này
+        # file_url = f"{MINIO_ENDPOINT_PUBLIC}/{MINIO_BUCKET}/{quote(file_obj.filename)}"
+        
+        file_url = f"{MINIO_ENDPOINT_PUBLIC}/{quote(file_obj.filename)}"
 
         new_file = File(
             filename=file_obj.filename,
@@ -143,9 +147,15 @@ def download_file(file_id):
                 "response-content-disposition": f'attachment; filename="{file.filename}"'
             }
         )
+        internal_host = MINIO_ENDPOINT.replace("http://", "").replace("https://", "")
+        public_host = MINIO_ENDPOINT_PUBLIC.replace("http://", "").replace("https://", "")
+
+        public_signed = presigned_url.replace(f"http://{internal_host}", f"http://{public_host}")
+        public_signed = public_signed.replace(f"https://{internal_host}", f"https://{public_host}")
+
         return jsonify({
             "message": "Tạo link tải thành công (hết hạn sau 7 ngày)",
-            "download_link": presigned_url
+            "download_link": public_signed 
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
