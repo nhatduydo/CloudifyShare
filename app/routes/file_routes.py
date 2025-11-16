@@ -152,15 +152,12 @@ def download_file(file_id):
                 return jsonify({"error": "Không có quyền"}), 403
 
         # 3. Lấy file từ MinIO
-        response = minio_client.get_object(MINIO_BUCKET, file.filename)
-        data = response.read()
+        download_url = f"{FRONTEND_BASE_URL}/files/download_binary/{file.id}"
 
-        # 4. Trả file về client
-        return send_file(
-            io.BytesIO(data),
-            as_attachment=True,
-            download_name=file.filename
-        )
+        return jsonify({
+            "message": "OK",
+            "download_url": download_url
+        })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -191,7 +188,7 @@ def make_file_public(file_id):
         file.is_public = True
         db.session.commit()
         
-        public_url = f"{FRONTEND_BASE_URL}/files/download/{file.id}"
+        public_url = f"{FRONTEND_BASE_URL}/files/public/{file.id}"
         return jsonify({
             "message": "File đã được chia sẻ công khai!",
             "public_url": public_url
