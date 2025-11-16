@@ -7,6 +7,7 @@ from urllib.parse import quote
 import os, io
 from datetime import timedelta
 import json
+from flask import send_file
 
 load_dotenv()
 file = Blueprint("file", __name__)
@@ -16,13 +17,17 @@ MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
 MINIO_BUCKET = os.getenv("MINIO_BUCKET_NAME")
-MINIO_ENDPOINT_PUBLIC = os.getenv("MINIO_ENDPOINT_PUBLIC")
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL")
+
+# Client nội bộ – dùng IP private
+_internal_host = MINIO_ENDPOINT.replace("http://", "").replace("https://", "")
+_internal_secure = MINIO_ENDPOINT.startswith("https")
 
 minio_client = Minio(
-    MINIO_ENDPOINT.replace("http://", "").replace("https://", ""),
+    _internal_host,
     access_key=MINIO_ACCESS_KEY,
     secret_key=MINIO_SECRET_KEY,
-    secure=MINIO_ENDPOINT.startswith("https")
+    secure=_internal_secure
 )
 
 # Tạo bucket nếu chưa có
@@ -56,8 +61,6 @@ def upload_file():
 
         # nếu không đúng thì đổi qua cái này
         # file_url = f"{MINIO_ENDPOINT_PUBLIC}/{MINIO_BUCKET}/{quote(file_obj.filename)}"
-        
-        file_url = f"{MINIO_ENDPOINT_PUBLIC}/{quote(file_obj.filename)}"
 
         new_file = File(
             filename=file_obj.filename,
@@ -68,6 +71,9 @@ def upload_file():
             is_public=False
         )
         db.session.add(new_file)
+        db.session.commit()
+        
+        file_url = f"{os.getenv('FRONTEND_BASE_URL')}/api/file/download/{new_file.id}"
         db.session.commit()
 
         return jsonify({
@@ -130,7 +136,6 @@ def delete_file(file_id):
 
 # Download file (link tạm thời)
 @file.route("/download/<int:file_id>", methods=["GET"])
-@jwt_required()
 def download_file(file_id):
     try:
         current_user = get_jwt_identity()
@@ -139,24 +144,16 @@ def download_file(file_id):
         if not file:
             return jsonify({"error": "Không tìm thấy file"}), 404
 
-        presigned_url = minio_client.presigned_get_object(
-            MINIO_BUCKET,
-            file.filename,
-            expires=timedelta(days=7),
-            response_headers={
-                "response-content-disposition": f'attachment; filename="{file.filename}"'
-            }
+        #  Lấy file từ MinIO
+        response = minio_client.get_object(MINIO_BUCKET, file.filename)
+        data = response.read()
+
+        # Gửi file về client
+        return send_file(
+            io.BytesIO(data),
+            as_attachment=True,
+            download_name=file.filename
         )
-        internal_host = MINIO_ENDPOINT.replace("http://", "").replace("https://", "")
-        public_host = MINIO_ENDPOINT_PUBLIC.replace("http://", "").replace("https://", "")
-
-        public_signed = presigned_url.replace(f"http://{internal_host}", f"http://{public_host}")
-        public_signed = public_signed.replace(f"https://{internal_host}", f"https://{public_host}")
-
-        return jsonify({
-            "message": "Tạo link tải thành công (hết hạn sau 7 ngày)",
-            "download_link": public_signed 
-        }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -184,10 +181,11 @@ def make_file_public(file_id):
         minio_client.set_bucket_policy(MINIO_BUCKET, json.dumps(policy))
         file.is_public = True
         db.session.commit()
-
+        
+        public_url = f"{FRONTEND_BASE_URL}/api/file/download/{file.id}"
         return jsonify({
             "message": "File đã được chia sẻ công khai!",
-            "public_url": file.file_url
+            "public_url": public_url
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
