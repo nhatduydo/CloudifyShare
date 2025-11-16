@@ -72,7 +72,7 @@ def upload_file():
         db.session.commit()
 
         # Cập nhật URL download
-        new_file.file_url = f"{FRONTEND_BASE_URL}/api/file/download/{new_file.id}"
+        new_file.file_url = f"{FRONTEND_BASE_URL}/files/download/{new_file.id}"
         db.session.commit()
 
         return jsonify({
@@ -191,7 +191,7 @@ def make_file_public(file_id):
         file.is_public = True
         db.session.commit()
         
-        public_url = f"{FRONTEND_BASE_URL}/api/file/download/{file.id}"
+        public_url = f"{FRONTEND_BASE_URL}/files/download/{file.id}"
         return jsonify({
             "message": "File đã được chia sẻ công khai!",
             "public_url": public_url
