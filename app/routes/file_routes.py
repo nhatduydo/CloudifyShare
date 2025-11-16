@@ -59,12 +59,10 @@ def upload_file():
             content_type=file_obj.content_type
         )
 
-        # nếu không đúng thì đổi qua cái này
-        # file_url = f"{MINIO_ENDPOINT_PUBLIC}/{MINIO_BUCKET}/{quote(file_obj.filename)}"
-
+        # Tạo bản ghi không có URL trước
         new_file = File(
             filename=file_obj.filename,
-            file_url=file_url,
+            file_url="",
             file_size=request.content_length or 0,
             file_type=file_obj.content_type,
             upload_by=user.id,
@@ -72,8 +70,9 @@ def upload_file():
         )
         db.session.add(new_file)
         db.session.commit()
-        
-        file_url = f"{os.getenv('FRONTEND_BASE_URL')}/api/file/download/{new_file.id}"
+
+        # Cập nhật URL download
+        new_file.file_url = f"{FRONTEND_BASE_URL}/api/file/download/{new_file.id}"
         db.session.commit()
 
         return jsonify({
@@ -89,6 +88,7 @@ def upload_file():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 # Danh sách file của user
@@ -133,29 +133,38 @@ def delete_file(file_id):
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
-
-# Download file (link tạm thời)
 @file.route("/download/<int:file_id>", methods=["GET"])
 def download_file(file_id):
     try:
-        current_user = get_jwt_identity()
-        user = User.query.filter_by(username=current_user).first()
-        file = File.query.filter_by(id=file_id, upload_by=user.id).first()
+        # 1. Lấy thông tin file
+        file = File.query.filter_by(id=file_id).first()
         if not file:
             return jsonify({"error": "Không tìm thấy file"}), 404
 
-        #  Lấy file từ MinIO
+        # 2. Nếu file private → cần JWT + đúng user
+        if not file.is_public:
+            current_user = get_jwt_identity()
+            if not current_user:
+                return jsonify({"error": "Bạn cần đăng nhập"}), 401
+
+            user = User.query.filter_by(username=current_user).first()
+            if not user or user.id != file.upload_by:
+                return jsonify({"error": "Không có quyền"}), 403
+
+        # 3. Lấy file từ MinIO
         response = minio_client.get_object(MINIO_BUCKET, file.filename)
         data = response.read()
 
-        # Gửi file về client
+        # 4. Trả file về client
         return send_file(
             io.BytesIO(data),
             as_attachment=True,
             download_name=file.filename
         )
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 # Chia sẻ file (public)
