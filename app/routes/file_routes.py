@@ -36,6 +36,8 @@ if not minio_client.bucket_exists(MINIO_BUCKET):
     minio_client.make_bucket(MINIO_BUCKET)
 
 # Upload file
+
+
 @file.route("/upload", methods=["POST"])
 @jwt_required()
 def upload_file():
@@ -135,23 +137,29 @@ def delete_file(file_id):
 
 
 @file.route("/download/<int:file_id>", methods=["GET"])
-@jwt_required()
+@jwt_required(optional=True)
 def download_file(file_id):
     try:
-        current_username = get_jwt_identity()
-        current_user = User.query.filter_by(username=current_username).first()
-
-        if not current_user:
-            return jsonify({"error": "Không tìm thấy user"}), 404
-
-        file_record = File.query.filter_by(id=file_id, upload_by=current_user.id).first()
+        file_record = File.query.filter_by(id=file_id).first()
         if not file_record:
             return jsonify({"error": "Không tìm thấy file hoặc bạn không có quyền tải"}), 404
 
-        # Nếu file là public, dùng FRONTEND_BASE_URL (vì MinIO private không thể truy cập trực tiếp)
+        # Nếu file là public, không cần JWT
         if file_record.is_public:
             download_link = f"{FRONTEND_BASE_URL}/files/download/{file_id}"
         else:
+            # File private: cần JWT và kiểm tra ownership
+            current_username = get_jwt_identity()
+            if not current_username:
+                return jsonify({"error": "Unauthorized"}), 401
+
+            current_user = User.query.filter_by(username=current_username).first()
+            if not current_user:
+                return jsonify({"error": "Không tìm thấy user"}), 404
+
+            if file_record.upload_by != current_user.id:
+                return jsonify({"error": "Không tìm thấy file hoặc bạn không có quyền tải"}), 404
+
             # File private: tạo presigned URL từ MinIO
             download_link = minio_client.presigned_get_object(
                 MINIO_BUCKET,
