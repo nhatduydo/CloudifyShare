@@ -36,8 +36,6 @@ if not minio_client.bucket_exists(MINIO_BUCKET):
     minio_client.make_bucket(MINIO_BUCKET)
 
 # Upload file
-
-
 @file.route("/upload", methods=["POST"])
 @jwt_required()
 def upload_file():
@@ -137,78 +135,71 @@ def delete_file(file_id):
 
 
 @file.route("/download/<int:file_id>", methods=["GET"])
-@jwt_required(optional=True)
+@jwt_required()
 def download_file(file_id):
     try:
-        # 1. Lấy thông tin file
-        file = File.query.filter_by(id=file_id).first()
-        if not file:
-            return jsonify({"error": "Không tìm thấy file"}), 404
+        current_username = get_jwt_identity()
+        current_user = User.query.filter_by(username=current_username).first()
 
-        # 2. Nếu file private → cần JWT + đúng user
-        if not file.is_public:
-            current_user = get_jwt_identity()
-            if not current_user:
-                return jsonify({"error": "Bạn cần đăng nhập"}), 401
+        if not current_user:
+            return jsonify({"error": "Không tìm thấy user"}), 404
 
-            user = User.query.filter_by(username=current_user).first()
-            if not user or user.id != file.upload_by:
-                return jsonify({"error": "Không có quyền"}), 403
+        file_record = File.query.filter_by(id=file_id, upload_by=current_user.id).first()
+        if not file_record:
+            return jsonify({"error": "Không tìm thấy file hoặc bạn không có quyền tải"}), 404
 
-        # 3. Tạo presigned link → luôn là dạng download (force attachment)
-        link = minio_client.presigned_get_object(
-            MINIO_BUCKET,
-            file.filename,
-            expires=timedelta(days=7),
-            response_headers={
-                "response-content-disposition": f"attachment; filename={file.filename}"
-            }
-        )
+        # Nếu file là public, dùng FRONTEND_BASE_URL (vì MinIO private không thể truy cập trực tiếp)
+        if file_record.is_public:
+            download_link = f"{FRONTEND_BASE_URL}/files/download/{file_id}"
+        else:
+            # File private: tạo presigned URL từ MinIO
+            download_link = minio_client.presigned_get_object(
+                MINIO_BUCKET,
+                file_record.filename,
+                expires=timedelta(days=7),
+                response_headers={
+                    "response-content-disposition": f"attachment; filename={file_record.filename}"
+                }
+            )
 
         return jsonify({
             "message": "Tạo link tải thành công (hết hạn sau 7 ngày)",
-            "download_link": link
+            "download_link": download_link
         }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 # Chia sẻ file (public)
 @file.route("/make_public/<int:file_id>", methods=["PUT"])
 @jwt_required()
 def make_file_public(file_id):
     try:
-        user = User.query.filter_by(username=get_jwt_identity()).first()
-        file = File.query.filter_by(id=file_id, upload_by=user.id).first()
-        if not file:
+        current_username = get_jwt_identity()
+        current_user = User.query.filter_by(username=current_username).first()
+
+        if not current_user:
+            return jsonify({"error": "Không tìm thấy user"}), 404
+
+        file_record = File.query.filter_by(id=file_id, upload_by=current_user.id).first()
+        if not file_record:
             return jsonify({"error": "Không tìm thấy file"}), 404
 
-        # Cho phép public GET object
-        # policy = {
-        #     "Version": "2012-10-17",
-        #     "Statement": [{
-        #         "Effect": "Allow",
-        #         "Principal": {"AWS": ["*"]},
-        #         "Action": ["s3:GetObject"],
-        #         "Resource": [f"arn:aws:s3:::{MINIO_BUCKET}/{file.filename}"]
-        #     }]
-        # }
-
-        # minio_client.set_bucket_policy(MINIO_BUCKET, json.dumps(policy))
-
-        file.is_public = True
+        # Cập nhật trạng thái public trong database (MinIO private không cần set ACL)
+        file_record.is_public = True
         db.session.commit()
 
-        # Link preview file – hiển thị trực tiếp trên browser
-        public_url = f"{FRONTEND_BASE_URL}/files/download/{file.id}"
+        # Dùng FRONTEND_BASE_URL vì MinIO private không thể truy cập trực tiếp
+        public_url = f"{FRONTEND_BASE_URL}/files/download/{file_id}"
 
         return jsonify({
-            "message": "File đã được chia sẻ công khai!",
+            "message": "File đã được chia sẻ công khai vĩnh viễn!",
             "public_url": public_url
         }), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 404
 
 
 # Tắt chia sẻ (private)
