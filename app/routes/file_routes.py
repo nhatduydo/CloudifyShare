@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, Response
+from flask import Blueprint, request, jsonify, Response, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import db, User, File
 from dotenv import load_dotenv
@@ -9,6 +9,7 @@ import io
 from datetime import timedelta
 import json
 from flask import send_file
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 load_dotenv()
 file = Blueprint("file", __name__)
@@ -19,6 +20,8 @@ MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
 MINIO_BUCKET = os.getenv("MINIO_BUCKET_NAME")
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL")
+DOWNLOAD_TOKEN_SALT = os.getenv("DOWNLOAD_TOKEN_SALT", "download-file-token")
+DOWNLOAD_TOKEN_MAX_AGE = int(os.getenv("DOWNLOAD_TOKEN_MAX_AGE", 60 * 60 * 24 * 7))
 
 # Client nội bộ – dùng IP private
 _internal_host = MINIO_ENDPOINT.replace("http://", "").replace("https://", "")
@@ -144,21 +147,47 @@ def download_file(file_id):
         if not file_record:
             return jsonify({"error": "Không tìm thấy file hoặc bạn không có quyền tải"}), 404
 
+        serializer = URLSafeTimedSerializer(
+            current_app.config["SECRET_KEY"],
+            salt=DOWNLOAD_TOKEN_SALT
+        )
+
         # Lấy JWT identity một lần
         current_username = get_jwt_identity()
 
         # Kiểm tra quyền truy cập
         if not file_record.is_public:
-            # File private: cần JWT và kiểm tra ownership
-            if not current_username:
+            authorized = False
+
+            if current_username:
+                current_user = User.query.filter_by(username=current_username).first()
+                if not current_user:
+                    return jsonify({"error": "Không tìm thấy user"}), 404
+
+                if file_record.upload_by != current_user.id:
+                    return jsonify({"error": "Không tìm thấy file hoặc bạn không có quyền tải"}), 404
+
+                authorized = True
+            else:
+                # Cho phép truy cập nếu có token hợp lệ trong query
+                token_param = request.args.get("token")
+                if not token_param:
+                    return jsonify({"error": "Unauthorized"}), 401
+
+                try:
+                    token_data = serializer.loads(token_param, max_age=DOWNLOAD_TOKEN_MAX_AGE)
+                except SignatureExpired:
+                    return jsonify({"error": "Link đã hết hạn"}), 401
+                except BadSignature:
+                    return jsonify({"error": "Token không hợp lệ"}), 401
+
+                if token_data.get("file_id") != file_id:
+                    return jsonify({"error": "Token không hợp lệ"}), 401
+
+                authorized = True
+
+            if not authorized:
                 return jsonify({"error": "Unauthorized"}), 401
-
-            current_user = User.query.filter_by(username=current_username).first()
-            if not current_user:
-                return jsonify({"error": "Không tìm thấy user"}), 404
-
-            if file_record.upload_by != current_user.id:
-                return jsonify({"error": "Không tìm thấy file hoặc bạn không có quyền tải"}), 404
 
         # Kiểm tra nếu request từ frontend (có JWT token) thì trả về JSON link
         # Nếu không có JWT (truy cập trực tiếp từ browser) thì stream file trực tiếp
@@ -167,17 +196,11 @@ def download_file(file_id):
         if wants_json:
             # Trả về JSON link cho frontend
             if file_record.is_public:
-                download_link = f"{FRONTEND_BASE_URL}/files/download/{file_id}"
+                download_link = f"{FRONTEND_BASE_URL}/files/download/{file_id}?mode=attachment"
             else:
-                # File private: tạo presigned URL từ MinIO
-                download_link = minio_client.presigned_get_object(
-                    MINIO_BUCKET,
-                    file_record.filename,
-                    expires=timedelta(days=7),
-                    response_headers={
-                        "response-content-disposition": f"attachment; filename={file_record.filename}"
-                    }
-                )
+                token_payload = {"file_id": file_id}
+                token = serializer.dumps(token_payload)
+                download_link = f"{FRONTEND_BASE_URL}/files/download/{file_id}?token={token}&mode=attachment"
 
             return jsonify({
                 "message": "Tạo link tải thành công (hết hạn sau 7 ngày)",
@@ -193,12 +216,14 @@ def download_file(file_id):
             except Exception as e:
                 return jsonify({"error": f"Không thể lấy file từ MinIO: {str(e)}"}), 500
 
+            disposition_mode = "inline" if request.args.get("mode") == "inline" else "attachment"
+
             # Tạo response với file data
             return Response(
                 file_data,
                 mimetype=file_record.file_type or 'application/octet-stream',
                 headers={
-                    "Content-Disposition": f"attachment; filename={quote(file_record.filename)}"
+                    "Content-Disposition": f"{disposition_mode}; filename={quote(file_record.filename)}"
                 }
             )
 
@@ -226,7 +251,7 @@ def make_file_public(file_id):
         db.session.commit()
 
         # Dùng FRONTEND_BASE_URL vì MinIO private không thể truy cập trực tiếp
-        public_url = f"{FRONTEND_BASE_URL}/files/download/{file_id}"
+        public_url = f"{FRONTEND_BASE_URL}/files/download/{file_id}?mode=inline"
 
         return jsonify({
             "message": "File đã được chia sẻ công khai vĩnh viễn!",
