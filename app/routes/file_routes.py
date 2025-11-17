@@ -4,7 +4,8 @@ from app.models import db, User, File
 from dotenv import load_dotenv
 from minio import Minio
 from urllib.parse import quote
-import os, io
+import os
+import io
 from datetime import timedelta
 import json
 from flask import send_file
@@ -35,6 +36,8 @@ if not minio_client.bucket_exists(MINIO_BUCKET):
     minio_client.make_bucket(MINIO_BUCKET)
 
 # Upload file
+
+
 @file.route("/upload", methods=["POST"])
 @jwt_required()
 def upload_file():
@@ -90,7 +93,6 @@ def upload_file():
         return jsonify({"error": str(e)}), 500
 
 
-
 # Danh sách file của user
 @file.route("/list", methods=["GET"])
 @jwt_required()
@@ -133,7 +135,9 @@ def delete_file(file_id):
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
+
 @file.route("/download/<int:file_id>", methods=["GET"])
+@jwt_required(optional=True)
 def download_file(file_id):
     try:
         # 1. Lấy thông tin file
@@ -151,18 +155,23 @@ def download_file(file_id):
             if not user or user.id != file.upload_by:
                 return jsonify({"error": "Không có quyền"}), 403
 
-        # 3. Lấy file từ MinIO
-        download_url = f"{FRONTEND_BASE_URL}/files/download_binary/{file.id}"
+        # 3. Tạo presigned link → luôn là dạng download (force attachment)
+        link = minio_client.presigned_get_object(
+            MINIO_BUCKET,
+            file.filename,
+            expires=timedelta(days=7),
+            response_headers={
+                "response-content-disposition": f"attachment; filename={file.filename}"
+            }
+        )
 
         return jsonify({
-            "message": "OK",
-            "download_url": download_url
-        })
+            "message": "Tạo link tải thành công (hết hạn sau 7 ngày)",
+            "download_link": link
+        }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
 
 # Chia sẻ file (public)
 @file.route("/make_public/<int:file_id>", methods=["PUT"])
@@ -174,25 +183,30 @@ def make_file_public(file_id):
         if not file:
             return jsonify({"error": "Không tìm thấy file"}), 404
 
-        # public ACL có thể bật bằng policy
-        policy = {
-            "Version": "2012-10-17",
-            "Statement": [{
-                "Effect": "Allow",
-                "Principal": {"AWS": ["*"]},
-                "Action": ["s3:GetObject"],
-                "Resource": [f"arn:aws:s3:::{MINIO_BUCKET}/{file.filename}"]
-            }]
-        }
-        minio_client.set_bucket_policy(MINIO_BUCKET, json.dumps(policy))
+        # Cho phép public GET object
+        # policy = {
+        #     "Version": "2012-10-17",
+        #     "Statement": [{
+        #         "Effect": "Allow",
+        #         "Principal": {"AWS": ["*"]},
+        #         "Action": ["s3:GetObject"],
+        #         "Resource": [f"arn:aws:s3:::{MINIO_BUCKET}/{file.filename}"]
+        #     }]
+        # }
+
+        # minio_client.set_bucket_policy(MINIO_BUCKET, json.dumps(policy))
+
         file.is_public = True
         db.session.commit()
-        
-        public_url = f"{FRONTEND_BASE_URL}/files/public/{file.id}"
+
+        # Link preview file – hiển thị trực tiếp trên browser
+        public_url = f"{FRONTEND_BASE_URL}/files/download/{file.id}"
+
         return jsonify({
             "message": "File đã được chia sẻ công khai!",
             "public_url": public_url
         }), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
