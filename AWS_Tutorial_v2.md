@@ -45,27 +45,7 @@ ICMP      All	        -	            0.0.0.0/0	      Ping test (tuỳ chọn)
 Outbound rules: giữ mặc định (All traffic).
 Luồng: Người dùng → Route 53 → ALB qua port 80/443.
 
-## 3.2 sg-ec2 (Flask App)
-Mục đích: cho phép ALB truy cập Flask app và Bastion SSH vào.
-Inbound rules:
-  Type	      Protocol	      Port	      Source	      Ghi chú
-  HTTP	        TCP	          80	        sg-lb	        Chỉ ALB được phép truy cập Flask
-  SSH	          TCP	          22	        sg-bastion	  Cho phép Bastion Host SSH vào
-  ICMP	        All	          All	        0.0.0.0/0	    Ping nội bộ kiểm tra
-Outbound rules: giữ mặc định (All traffic).
-Luồng: ALB → EC2 Flask App.
-Flask chỉ nhận truy cập từ ALB và SSH từ Bastion.
-
-## 3.3 sg-rds (RDS MySQL)
-Mục đích: chỉ cho EC2 Flask được phép kết nối cơ sở dữ liệu.
-Inbound rules:
-  Type	        Protocol	      Port	      Source	          Ghi chú
-  MySQL/Aurora	  TCP	          3306	      sg-ec2-flask	    Chỉ Flask App được kết nối DB
-
-Outbound rules: giữ mặc định.
-Luồng: EC2 Flask → RDS MySQL (port 3306).
-
-## 3.4 sg-bastion (Bastion Host)
+## 3.2 sg-bastion (Bastion Host)
 Mục đích: cho phép máy quản trị SSH vào hệ thống.
 Inbound rules:
   Type	      Protocol	        Port	        Source	            Ghi chú
@@ -74,6 +54,28 @@ Inbound rules:
 
 Outbound rules: giữ mặc định.
 Luồng: Máy quản trị → Bastion (Public IP) → EC2 Flask (Private IP).
+
+
+## 3.3 sg-ec2 (Flask App)
+Mục đích: cho phép ALB truy cập Flask app và Bastion SSH vào.
+Inbound rules:
+  Type	      Protocol	      Port	      Source	      Ghi chú
+  HTTP	        TCP	          80	        sg-lb	        Chỉ ALB được phép truy cập Flask
+  SSH	        TCP	          22	        sg-bastion	  Cho phép Bastion Host SSH vào
+  ICMP	        All	          All	        0.0.0.0/0	    Ping nội bộ kiểm tra
+Outbound rules: giữ mặc định (All traffic).
+Luồng: ALB → EC2 Flask App.
+Flask chỉ nhận truy cập từ ALB và SSH từ Bastion.
+
+## 3.4 sg-rds (RDS MySQL)
+Mục đích: chỉ cho EC2 Flask được phép kết nối cơ sở dữ liệu.
+Inbound rules:
+  Type	        Protocol	      Port	      Source	          Ghi chú
+  MySQL/Aurora	  TCP	          3306	      sg-ec2-flask	    Chỉ Flask App được kết nối DB
+
+Outbound rules: giữ mặc định.
+Luồng: EC2 Flask → RDS MySQL (port 3306).
+
 
 ## 3.5 sg-minio (MinIO Storage)
 Mục đích:
@@ -87,123 +89,8 @@ Inbound rules:
   ICMP	All	-	0.0.0.0/0	Ping test (tuỳ chọn)
 Outbound rules: giữ mặc định.
 
-# 4. Tạo EC2 Flask App (Launch Template)
-#### Bước 1 — Mở Launch Template
-- EC2 → Launch Template → Create Launch Template
-BƯỚC 3: Tạo EC2 Launch Template (Flask App)
-    Mục	                            Giá trị
-    Name	                        flask-template
-    Description	                    Template for Flask EC2 instances
-    Auto Scaling guidance	        Enabled
 
-Cấu hình:
-    Quick Start
-    AMI: Ubuntu Server 22.04 LTS (Free tier eligible)
-    Instance type: t2.micro
-    Key pair: cloudify-key.pem (tạo mới nếu chưa có)
-    Network: Không chọn subnet
-    Auto-assign public IP: Disable (vì ở private subnet)
-    Availability Zone: Để trống	Auto chọn
-    Security group: sg-ec2
-    Volume: 8 GiB gp3
-    Tag: Project=CloudifyShare
-
-#### Bước 2 - Advanced network configuration
-- Subnet: Remove subnet (nếu còn hiện dòng đỏ)	Không được chọn subnet cho Auto Scaling
-- Security groups: sg-ec2-flask
-- Auto-assign public IP: Disable	Vì EC2 Flask nằm trong private subnet, không có IP public
-Các phần khác (Primary IP, IPv6, Prefixes, Description, …)	Để mặc định (Don't include)	Không cần chỉnh
-
-#### Bước 3 — Advanced details → User data (rất quan trọng)
-Trong ô User data, dán đoạn script sau để EC2 tự cài app Flask khi khởi động:
-
-```
-EC2 cài Python, pip, git
-Clone repo CloudifyShare (nhánh main)
-Cài thư viện Flask
-Tự động thêm crontab để Flask chạy lại sau mỗi lần reboot
-Chạy Flask ngay lần đầu EC2 khởi động
-```
-### Bước 4 — Review & Create
-Nhấn Create launch template
-→ AWS sẽ tạo mẫu máy chủ EC2 Flask của bạn.
-
-Bạn có thể kiểm tra bằng cách:
-- Vào EC2 → Launch Template → flask-template → Launch instance from template
-- Chạy thử 1 máy để kiểm tra:
-    Khi khởi động xong → SSH vào máy
-Dùng lệnh:
-    ps aux | grep python
-Nếu thấy python3 run.py đang chạy → script hoạt động tốt 
-
-# 5. Tạo Auto Scaling Group
-- EC2 → Auto Scaling Groups → Create
-- Name: asg-flask
-- Launch template: flask-template
-- Version: Latest
-- VPC: cloudify-vpc
-- Availability Zones and subnets: private1 và private2
-- Balanced best effort
-
-#### Integrate with other services - optional - Load balancing 
-- Select Load balancing options: Attach to an existing load balancer
-- chọn tg-flask
-
-
-- Load balancer type: Application Load Balancer (ALB) (HTTP, HTTPS)
-- Load balancer name: asg-flask-lb
-- Load balancer scheme: Internet-facing
-- Availability Zones and subnets: Chọn 2 public subnets
-- Listeners and routing: Protocol: HTTP - Port: 80
-- Default routing (target group): Create a target group
-
-#### Health Checks:
-EC2 health checks: Enabled
-ELB health checks: Enabled
-Health check grace period: 300 giây
-
-#### VPC Lattice integration options
-- Select VPC Lattice service to attach: No VPC Lattice service
-- Application Recovery Controller (ARC) zonal shift: không tick
-Health checks
-- EC2 health checks: Always enabled
-- Turn on Elastic Load Balancing health checks: Bật
-- Turn on Amazon EBS health checks: Không bật
-- Health check grace period: 300
-
-#### Tag (optional)
-Key: Project
-Value: CloudifyShare
-
-### CONFIGURE GROUP SIZE AND SCALING
-- Desired capacity: 2
-- Minimum capacity: 1
-- Maximum capacity: 3
-- Choose whether to use a target tracking policy: Target tracking scaling policy
-- Metric type: Average CPU utilization
-- Target value: 60
-Instance maintenance policy
-- chọn: Launch before terminating
-- Capacity Reservation preference: Default
-- Enable instance scale-in protection: Không bật
-- Enable group metrics collection within CloudWatch: Bật
-- Enable default instance warmu:p Bật, 180 seconds
-
-- Add tags: Project = CloudifyShare
-==> Create Auto Scaling group
-
-### kiểm tra hoạt động thực tế của hệ thống
-Sau khi nhấn Create và đợi vài phút (~3-5 phút):
-    Vào EC2 → Auto Scaling Groups → Instance management → kiểm tra Health = Healthy.
-    Vào EC2 → Load Balancers → cloudify-lb → copy DNS name → dán vào trình duyệt.
-
-
-- AWS Console → EC2 → Load Balancers
-- Chọn Application Load Balancer bạn đã tạo
-- Chuyển sang tab “instance management” bạn sẽ thấy dòng: 
-    Kiểm tra Status = running và Health = healthy.
-
-# 6. Tạo Bastion Host
+# 4. Tạo Bastion Host
 ### tạo bastion public
 #### BƯỚC 1: Tạo Bastion Host EC2 (Public Subnet)
 Vào AWS Console → EC2 → Launch instance
@@ -251,12 +138,56 @@ Kết quả mong muốn:
     Từ Bastion SSH nội bộ vào EC2 Flask bằng private IP
     Sau đó bạn có thể xem log Flask hoặc chạy lệnh kiểm tra app.
 
-### tạo bastion private
 
-# 7. Tạo RDS MySQL (trong AWS Academy)
+# 5. Cấu hình MinIO (thay thế S3)
+Cài đặt MinIO trong private subnet (hoặc EC2 riêng).
+
+## hướng dẫn public - test
+Tạo 1 instance mới:
+Có thể truy cập web http://<public-ip>:9001
+
+### BƯỚC 1: Mở AWS Console → EC2 → Launch instance
+Mục	Giá trị đề xuất
+Name	            minio-public
+AMI	                Ubuntu Server 22.04 LTS
+Instance type	    t3.micro (hoặc t2.micro)
+Key pair	        Chọn key bạn đã có (ví dụ: cloudify.pem)
+
+### BƯỚC 2: Cấu hình Network
+VPC: cloudifyshare-vpc
+Subnet:Chọn subnet public: cloudifyshare-subnet-public1-us-east-1
+Auto-assign public IP: Enable 
+  → Đây là điểm quan trọng nhất để instance có Public IP.
+
+### BƯỚC 3: Security Group
+Chọn Create new security group (hoặc chọn “Select existing” nếu đã có).
+ Nếu tạo mới:
+  Tên: sg-minio-public
+  Type	    Protocol	        Port    range	      Source	      Mục đích
+  SSH	        TCP	             22	    0.0.0.0/0	  Cho phép      SSH
+  Custom      TCP	            TCP	    9000	      0.0.0.0/0	    API MinIO
+  Custom      TCP	            TCP	    9001	      0.0.0.0/0	    Giao diện MinIO
+
+### BƯỚC 4: User Data Script
+ Advanced details →  User data → Dán script
+
+File .env của Flask:
+```
+MINIO_ENDPOINT=http://10.0.1.25:9000
+MINIO_ACCESS_KEY=admin
+MINIO_SECRET_KEY=Admin123!
+MINIO_BUCKET_NAME=cloudifyshare-main
+```
+Nếu có thêm MinIO backup ở AZ khác:
+```
+MINIO_BACKUP_ENDPOINT=http://10.0.2.25:9000
+```
+
+
+
+# 6. Tạo RDS MySQL (trong AWS Academy)
 
 ## tạo DB Subnet Group
-
 ### bước 1. Basic info
 RDS => Subnet groups → Create DB Subnet Group
 Field	                Value
@@ -315,69 +246,257 @@ DB_PASS=admin123
 DB_NAME=cloudsharedb
 ```
 
-# 8. Cấu hình MinIO (thay thế S3)
-Cài đặt MinIO trong private subnet (hoặc EC2 riêng).
+## kiểm tra kết database 
+từ basiotn => ec2 flask 
 
-## hướng dẫn public - test
-Tạo 1 instance mới:
-Có thể truy cập web http://<public-ip>:9001
+### test kết nối 
+nc -zv cloudsharedb.cjzdt6vrob6s.us-east-1.rds.amazonaws.com 3306
+==> nếu thành công: Connection to cloudsharedb.cjzdt6vrob6s.us-east-1.rds.amazonaws.com 3306 port [tcp/mysql] succeeded!
 
-### BƯỚC 1: Mở AWS Console → EC2 → Launch instance
-Mục	Giá trị đề xuất
-Name	            minio-public
-AMI	                Ubuntu Server 22.04 LTS
-Instance type	    t3.micro (hoặc t2.micro)
-Key pair	        Chọn key bạn đã có (ví dụ: cloudify.pem)
-
-### BƯỚC 2: Cấu hình Network
-VPC: cloudifyshare-vpc
-Subnet:Chọn subnet public: cloudifyshare-subnet-public1-us-east-1
-Auto-assign public IP: Enable 
-  → Đây là điểm quan trọng nhất để instance có Public IP.
-
-### BƯỚC 3: Security Group
-Chọn Create new security group (hoặc chọn “Select existing” nếu đã có).
- Nếu tạo mới:
-  Tên: sg-minio-public
-  Type	    Protocol	        Port    range	      Source	      Mục đích
-  SSH	        TCP	             22	    0.0.0.0/0	  Cho phép      SSH
-  Custom      TCP	            TCP	    9000	      0.0.0.0/0	    API MinIO
-  Custom      TCP	            TCP	    9001	      0.0.0.0/0	    Giao diện MinIO
-
-### BƯỚC 4: User Data Script
- Advanced details →  User data → Dán script
-
-File .env của Flask:
+## kết nối mysql
+Cài MySQL client
 ```
-MINIO_ENDPOINT=http://10.0.1.25:9000
-MINIO_ACCESS_KEY=admin
-MINIO_SECRET_KEY=Admin123!
-MINIO_BUCKET_NAME=cloudifyshare-main
+sudo apt update
+sudo apt install mysql-client -y
 ```
-Nếu có thêm MinIO backup ở AZ khác:
 ```
-MINIO_BACKUP_ENDPOINT=http://10.0.2.25:9000
+mysql -h cloudsharedb.cjzdt6vrob6s.us-east-1.rds.amazonaws.com -u admin -p
 ```
 
-# 10. CloudWatch Monitoring và AWS Backup
+Admin123
+Nếu OK → sẽ thấy:   mysql>
 
+SHOW DATABASES;
+CREATE DATABASE cloudifyshare;
+
+# 7. Tạo EC2 Flask App (Launch Template)
+#### Bước 1 — Mở Launch Template
+- EC2 → Launch Template → Create Launch Template
+BƯỚC 3: Tạo EC2 Launch Template (Flask App)
+    Mục	                            Giá trị
+    Name	                        flask-template
+    Description	                    Template for Flask EC2 instances
+    Auto Scaling guidance	        Enabled
+
+Cấu hình:
+    Quick Start
+    AMI: Ubuntu Server 22.04 LTS (Free tier eligible)
+    Instance type: t2.micro
+    Key pair: cloudify-key.pem (tạo mới nếu chưa có)
+    Network: Không chọn subnet
+    Auto-assign public IP: Disable (vì ở private subnet)
+    Availability Zone: Để trống	Auto chọn
+    Security group: sg-ec2
+    Volume: 8 GiB gp3
+    Tag: Project=CloudifyShare
+
+#### Bước 2 - Advanced network configuration
+- Subnet: Remove subnet (nếu còn hiện dòng đỏ)	Không được chọn subnet cho Auto Scaling
+- Security groups: sg-ec2-flask
+- Auto-assign public IP: Disable	Vì EC2 Flask nằm trong private subnet, không có IP public
+Các phần khác (Primary IP, IPv6, Prefixes, Description, …)	Để mặc định (Don't include)	Không cần chỉnh
+
+#### Bước 3 — Advanced details → User data (rất quan trọng)
+Trong ô User data, dán đoạn script sau để EC2 tự cài app Flask khi khởi động:
+
+```
+EC2 cài Python, pip, git
+Clone repo CloudifyShare (nhánh main)
+Cài thư viện Flask
+Tự động thêm crontab để Flask chạy lại sau mỗi lần reboot
+Chạy Flask ngay lần đầu EC2 khởi động
+```
+### Bước 4 — Review & Create
+Nhấn Create launch template
+→ AWS sẽ tạo mẫu máy chủ EC2 Flask của bạn.
+
+Bạn có thể kiểm tra bằng cách:
+- Vào EC2 → Launch Template → flask-template → Launch instance from template
+- Chạy thử 1 máy để kiểm tra:
+    Khi khởi động xong → SSH vào máy
+Dùng lệnh:
+    ps aux | grep python
+Nếu thấy python3 run.py đang chạy → script hoạt động tốt 
+
+
+# hướng dẫn kêt nối load banlancer - ec2 instance  private
+## Bước 1. Tạo ALB
+Vào:
+AWS Console → EC2 → Load Balancers → Create Load Balancer → Application Load Balancer
+
+Mục	Giá trị
+Name	                            cloudify-lb
+Scheme	                          Internet-facing
+Load balancer IP address type	    IPv4
+VPC	                              cloudify-vpc
+IP pools                          bỏ trống
+Mappings	                        Chọn 2 public subnets
+Security group	                  Chọn sg-lb (HTTP/HTTPS từ Internet)
+Listeners	                        HTTP port 80
+Routing action                    Forward to target groups
+## Bước 2. Tạo Target Group
+Khi AWS hỏi "Target group" → chọn Create target group.
+Mục	                Giá trị
+Target type	        Instances
+Protocol	          HTTP
+Port	              80
+VPC	                cloudify-vpc
+Health check path	  / (nếu Flask có trang chủ)
+→ Create target group
+Sau đó, Add target manually → chọn EC2 Flask instance private subnet → Add to registered.
+
+## Bước 3. Gắn Target Group vào ALB
+Trong giao diện ALB đang tạo, chọn Listener: HTTP:80 → Forward to target group vừa tạo ở bước trên.
+Nhấn Create Load Balancer.
+
+## Bước 4. Kiểm tra
+Sau vài phút (khi trạng thái target = healthy):
+Vào EC2 → Load Balancers → cloudify-lb
+Copy dòng DNS name (ví dụ: cloudify-lb-123456789.us-east-1.elb.amazonaws.com)
+Dán lên trình duyệt: http://cloudify-lb-123456789.us-east-1.elb.amazonaws.com
+  Nếu thấy giao diện Flask → thành công rồi!
+  Cấu trúc sau bước này:
+      User (browser)
+          ↓
+      Internet
+          ↓
+      Application Load Balancer (Public Subnet)
+          ↓
+      EC2 Flask App (Private Subnet)
+→ Không cần public IP cho EC2.
+→ Security group sg-ec2 chỉ cần cho phép HTTP từ sg-lb.
+→ Đây là cách production thực hiện 100%.
+
+## Nhấn vào dòng “Create target group” (chữ xanh bên phải)
+Một cửa sổ hoặc trang mới sẽ hiện ra để bạn tạo Target Group.
+Tạo theo thông số sau:
+Trường      	                      Giá trị
+Target type	                        Instances
+Target group name	                  tg-flask
+Protocol	                          HTTP1
+Port	                              80
+VPC	                                cloudify-vpc
+Health check protocol	              HTTP
+Health check path	                  / (hoặc đường dẫn nào Flask có, ví dụ /login)
+
+Rồi nhấn Next.
+
+### Chọn Target (instance)
+Ở phần “Register targets”, bạn sẽ thấy danh sách các EC2 trong VPC.
+  → Chọn EC2 Flask instance private subnet mà bạn đã chạy Flask.
+  → Click Add to registered (bên dưới)
+  → Nhấn Create target group.
+
+
+
+# 8. Tạo Auto Scaling Group
+- EC2 → Auto Scaling Groups → Create
+- Name: asg-flask
+- Launch template: flask-template
+- Version: Latest
+- VPC: cloudify-vpc
+- Availability Zones and subnets: private1 và private2
+- Balanced best effort
+
+#### Integrate with other services - optional - Load balancing 
+- Select Load balancing options: Attach to an existing load balancer
+- chọn tg-flask
+
+- Load balancer type: Application Load Balancer (ALB) (HTTP, HTTPS)
+- Load balancer name: asg-flask-lb
+- Load balancer scheme: Internet-facing
+- Availability Zones and subnets: Chọn 2 public subnets
+- Listeners and routing: Protocol: HTTP - Port: 80
+- Default routing (target group): Create a target group
+
+#### Health Checks:
+EC2 health checks: Enabled
+ELB health checks: Enabled
+Health check grace period: 300 giây
+
+#### VPC Lattice integration options
+- Select VPC Lattice service to attach: No VPC Lattice service
+- Application Recovery Controller (ARC) zonal shift: không tick Health checks
+- EC2 health checks: Always enabled
+- Turn on Elastic Load Balancing health checks: Bật
+- Turn on Amazon EBS health checks: Không bật
+- Health check grace period: 300
+
+#### Tag (optional)
+Key: Project
+Value: CloudifyShare
+
+### CONFIGURE GROUP SIZE AND SCALING
+- Desired capacity: 2
+- Minimum capacity: 1
+- Maximum capacity: 3
+- Choose whether to use a target tracking policy: Target tracking scaling policy
+- Metric type: Average CPU utilization
+- Target value: 60
+Instance maintenance policy
+- chọn: Launch before terminating
+- Capacity Reservation preference: Default
+- Enable instance scale-in protection: Không bật
+- Enable group metrics collection within CloudWatch: Bật
+- Enable default instance warmu:p Bật, 180 seconds
+
+- Add tags: Project = CloudifyShare
+==> Create Auto Scaling group
+
+### kiểm tra hoạt động thực tế của hệ thống
+Sau khi nhấn Create và đợi vài phút (~3-5 phút):
+    Vào EC2 → Auto Scaling Groups → Instance management → kiểm tra Health = Healthy.
+    Vào EC2 → Load Balancers → cloudify-lb → copy DNS name → dán vào trình duyệt.
+
+
+- AWS Console → EC2 → Load Balancers
+- Chọn Application Load Balancer bạn đã tạo
+- Chuyển sang tab “instance management” bạn sẽ thấy dòng: 
+    Kiểm tra Status = running và Health = healthy.
+
+
+# 9. CloudWatch Monitoring và AWS Backup
 CloudWatch:
-
 Theo dõi CPU, RAM, Network của EC2 Flask App.
-
 Tạo alarm khi CPU > 70% để scale out, < 30% để scale in.
-
 AWS Backup:
-
 Tạo Backup Plan: cloudify-backup-plan
-
 Chọn tài nguyên: RDS, EC2
-
 Frequency: Daily
-
 Retention: 30 days
 
-# 11. Route 53 và Domain
+## PHẦN 1 — Thiết lập CloudWatch Monitoring + Auto Scaling Alarms
+(để EC2 Flask App tự scale dựa trên CPU)
+Bạn đã có Auto Scaling Group (asg-flask), nên chỉ cần tạo 2 alarm:
+CPU > 70% → scale out
+CPU < 30% → scale in
+### BƯỚC 1 — Mở Auto Scaling Group
+EC2 → Auto Scaling Groups → asg-flask
+### BƯỚC 2 — Tạo Scaling Policy cho Scale Out (CPU > 70%)
+Tab Automatic scaling
+Nhấn Create dynamic scaling policy
+Chọn:
+1. Policy type                          Target tracking scaling
+2. Scaling Policy Name                  asg-flask-scale-out
+3. Metric type                          Average CPU Utilization
+4. Target Value                         60%    (AWS tự tăng giảm để duy trì CPU ~60% → tương đương CPU > 70% sẽ scale out)
+5. Instance warmup                      180 seconds
+Nhấn Create.
+### BƯỚC 3 — Tạo Scaling Policy cho Scale In (CPU < 30%)
+
+Bạn không cần tạo manual alarm.
+→ AWS tự scale in khi CPU thấp (vì target tracking = 60%).
+→ Không cần cấu hình thêm.
+
+### KẾT LUẬN CLOUDWATCH
+Bạn đã có:
+✔ Auto Scale Out khi traffic cao
+✔ Auto Scale In khi traffic giảm
+✔ Monitoring CPU trong CloudWatch
+✔ Không cần tạo alarm thủ công (đã nằm trong scaling policy)
+
+
+# 10. Route 53 và Domain
 
 Route 53 → Hosted Zones → Create Zone
 Domain: cloudifyshare.website
@@ -395,7 +514,7 @@ Truy cập: http://app.cloudifyshare.website
 Luồng truy cập:
 User → Route 53 → Internet Gateway → ALB → EC2 Flask (Private Subnet) → RDS MySQL → MinIO Storage.
 
-# 12. Kết quả tổng thể
+# 11. Kết quả tổng thể
 Thành phần	Nơi triển khai	Vai trò
 VPC, EC2, ALB, Auto Scaling, Bastion, CloudWatch, Backup	AWS Academy	Toàn bộ hệ thống ứng dụng
 RDS MySQL	AWS Academy (Private subnet)	Lưu trữ dữ liệu chính
@@ -403,7 +522,7 @@ MinIO (Main + Backup)	AWS Academy (Private subnet)	Lưu trữ và sao lưu file
 Firebase	Dịch vụ ngoài AWS	Gửi thông báo realtime
 Route 53 + Domain	AWS	Quản lý DNS truy cập web
 
-# 13. MÔ TẢ LUỒNG KẾT NỐI MẠNG HỆ THỐNG CLOUDIFYSHARE
+# 12. MÔ TẢ LUỒNG KẾT NỐI MẠNG HỆ THỐNG CLOUDIFYSHARE
 
 Hệ thống hoạt động trong một VPC (Virtual Private Cloud), được chia thành các public subnet và private subnet để tách biệt giữa các thành phần hướng Internet (public-facing) và nội bộ (internal-facing).
 Luồng truyền dữ liệu được chia thành ba loại chính: Inbound traffic, Outbound traffic, và Internal traffic.
