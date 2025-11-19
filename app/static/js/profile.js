@@ -29,7 +29,7 @@ document.getElementById('btnSaveInfo').addEventListener('click', async () => {
     showToast('Cập nhật tài khoản thành công!', 'success');
     localStorage.setItem('user_name', full_name);
   } else {
-    showToast(data.error, 'error');
+    showToast('data.error', 'error');
   }
 });
 
@@ -52,7 +52,7 @@ document.getElementById('btnUpdateAvatar').addEventListener('click', async () =>
     document.getElementById('avatarPreview').src = data.avatar_url;
     localStorage.setItem('user_avatar', data.avatar_url);
   } else {
-    showToast(data.error, 'error');
+    //showToast(data.error, 'error');
   }
 });
 
