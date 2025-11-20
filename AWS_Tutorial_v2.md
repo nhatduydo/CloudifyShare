@@ -455,7 +455,7 @@ Sau khi nhấn Create và đợi vài phút (~3-5 phút):
     Kiểm tra Status = running và Health = healthy.
 
 
-# 9. CloudWatch Monitoring và AWS Backup
+# 9. CloudWatch Monitoring 
 CloudWatch:
 Theo dõi CPU, RAM, Network của EC2 Flask App.
 Tạo alarm khi CPU > 70% để scale out, < 30% để scale in.
@@ -482,11 +482,7 @@ Chọn:
 4. Target Value                         60%    (AWS tự tăng giảm để duy trì CPU ~60% → tương đương CPU > 70% sẽ scale out)
 5. Instance warmup                      180 seconds
 Nhấn Create.
-### BƯỚC 3 — Tạo Scaling Policy cho Scale In (CPU < 30%)
 
-Bạn không cần tạo manual alarm.
-→ AWS tự scale in khi CPU thấp (vì target tracking = 60%).
-→ Không cần cấu hình thêm.
 
 ### KẾT LUẬN CLOUDWATCH
 Bạn đã có:
@@ -496,23 +492,49 @@ Bạn đã có:
 ✔ Không cần tạo alarm thủ công (đã nằm trong scaling policy)
 
 
-# 10. Route 53 và Domain
+# 10.1 Route 53 và Domain => bỏ qua vì không có quyền
 
-Route 53 → Hosted Zones → Create Zone
-Domain: cloudifyshare.website
+# 10.2 thực hiện SSL thông qua [cloudflare](https://cloudflare.com/)
+### Bước 1: Tạo tài khoản Cloudflare và add domain
+Vào trang cloudflare.com, đăng ký tài khoản (Free).
+ chọn:                                      Add a site (hoặc Add domain).
+Nhập domain:                                systemaccommodation.online
+Chọn gói:                                   Free Plan
+Cloudflare sẽ scan DNS hiện có. Cứ để nó chạy xong rồi qua bước sau.
+### Bước 2. Domain gốc trỏ về ALB
+Nếu bạn muốn truy cập thẳng:                https://systemaccommodation.online
+thì thêm một bản ghi nữa:
+Type:                       CNAME
+Name:                       @
+Target:                     cloudify-lb-450309802.us-east-1.elb.amazonaws.com
+Proxy status:               bật (Proxied)
+### Bước 3: Đổi Nameserver bên Namecheap sang Cloudflare
+Khi add site xong, Cloudflare sẽ hiện 2 nameserver dạng:
+    xxxxx.ns.cloudflare.com
+    yyyyy.ns.cloudflare.com
+Vào Namecheap → Domain List → chọn systemaccommodation.online → Manage.
+Ở mục Nameservers:  Chọn: Custom DNS
+Nhập 2 giá trị nameserver Cloudflare vừa cho.
+Nhấn Save.
+Sau đó chờ Cloudflare cập nhật.
+Trong trang Cloudflare, ở phần Overview của domain, nó sẽ báo khi nào status chuyển sang “Active”. Thường mất 5-30 phút.    
 
-Thêm record:
+### Bước 4: Bật SSL trên Cloudflare
+Khi Cloudflare báo domain “Active”:
+Vào trang quản lý domain trong Cloudflare.
+Vào mục: SSL/TLS.
+Ở phần SSL/TLS encryption mode, chọn:           Flexible
+Giải thích:
+    Trình duyệt ↔ Cloudflare: HTTPS
+    Cloudflare ↔ ALB: HTTP (port 80)
+    Hoàn toàn phù hợp với kiến trúc hiện tại của bạn, không cần certificate trên AWS.
 
-Name: app.cloudifyshare.website
-
-Type: A (Alias)
-
-Target: DNS của ALB
-
-Truy cập: http://app.cloudifyshare.website
-
-Luồng truy cập:
-User → Route 53 → Internet Gateway → ALB → EC2 Flask (Private Subnet) → RDS MySQL → MinIO Storage.
+### Bước 5: Bắt buộc chuyển HTTP sang HTTPS
+Vẫn trong Cloudflare:
+Vào mục SSL/TLS → Edge Certificates:
+Bật “Always Use HTTPS”.
+Bật “Automatic HTTPS Rewrites” (nếu có).
+Như vậy, khi người dùng gõ http://app.systemaccommodation.online, Cloudflare sẽ tự redirect sang https://app.systemaccommodation.online.
 
 # 11. Kết quả tổng thể
 Thành phần	Nơi triển khai	Vai trò
@@ -523,70 +545,42 @@ Firebase	Dịch vụ ngoài AWS	Gửi thông báo realtime
 Route 53 + Domain	AWS	Quản lý DNS truy cập web
 
 # 12. MÔ TẢ LUỒNG KẾT NỐI MẠNG HỆ THỐNG CLOUDIFYSHARE
-
 Hệ thống hoạt động trong một VPC (Virtual Private Cloud), được chia thành các public subnet và private subnet để tách biệt giữa các thành phần hướng Internet (public-facing) và nội bộ (internal-facing).
 Luồng truyền dữ liệu được chia thành ba loại chính: Inbound traffic, Outbound traffic, và Internal traffic.
-
 13.1. Luồng Inbound (từ người dùng vào hệ thống)
-
 Mục tiêu: người dùng truy cập vào Flask App thông qua tên miền được quản lý bởi Route 53.
-
 Trình tự luồng Inbound:
-
 Người dùng nhập địa chỉ: http://app.cloudifyshare.website
-
 Route 53 DNS phân giải domain đến Application Load Balancer (ALB) trong public subnet.
-
 ALB tiếp nhận request HTTP/HTTPS qua cổng 80/443.
-
 ALB chuyển tiếp yêu cầu đến EC2 Flask App trong private subnet (được đăng ký trong Target Group).
-
 EC2 Flask App xử lý yêu cầu, truy vấn dữ liệu từ RDS MySQL hoặc đọc file từ MinIO.
-
 Flask App gửi phản hồi (Response) ngược trở lại ALB.
-
 ALB trả kết quả cuối cùng cho người dùng thông qua Internet Gateway.
 
 Luồng tóm tắt:
-
 Người dùng → Route 53 → Internet Gateway → ALB (Public subnet) → EC2 Flask App (Private subnet) → RDS / MinIO → Người dùng.
-
 Đặc điểm:
-
 ALB là thành phần duy nhất public-facing.
-
 EC2 Flask App không có Public IP, chỉ nhận traffic nội bộ từ ALB.
-
 Luồng này đi từ ngoài vào trong VPC.
-
 13.2. Luồng Outbound (từ hệ thống ra Internet)
-
 Mục tiêu: cho phép EC2 Flask App gọi API bên ngoài, gửi thông báo, hoặc cập nhật gói phần mềm.
-
 Trình tự luồng Outbound:
-
 EC2 Flask App (private subnet) gửi request ra ngoài Internet (ví dụ: gửi dữ liệu đến Firebase hoặc truy cập API).
-
 Request được định tuyến qua Route Table của private subnet, chuyển đến NAT Gateway trong public subnet.
-
 NAT Gateway chuyển request ra ngoài thông qua Internet Gateway.
-
 Dịch vụ bên ngoài (như Firebase) trả dữ liệu phản hồi ngược lại qua NAT → EC2 Flask App.
 
 Luồng tóm tắt:
-
 EC2 Flask App → NAT Gateway (Public subnet) → Internet Gateway → Internet (Firebase, API ngoài).
 
 Đặc điểm:
-
 EC2 Flask App không có Public IP, nhưng vẫn ra Internet được nhờ NAT Gateway.
-
 NAT Gateway giúp duy trì tính bảo mật, vì không cho phép truy cập từ Internet vào private subnet.
-
 Luồng này đi từ trong ra ngoài VPC.
 
 13.3. Luồng Internal (giao tiếp nội bộ trong VPC)
-
 Mục tiêu: các dịch vụ trong hệ thống giao tiếp với nhau nội bộ, không qua Internet.
 
 Trình tự luồng Internal:
@@ -608,43 +602,29 @@ RDS MySQL ↔ AWS Backup:
 AWS Backup truy cập trực tiếp RDS để thực hiện sao lưu tự động hàng ngày.
 
 Luồng tóm tắt:
-
 Flask ↔ RDS: truyền dữ liệu cơ sở dữ liệu.
-
 Flask ↔ MinIO: truyền file nội bộ.
-
 RDS ↔ AWS Backup: sao lưu định kỳ.
-
 Flask ↔ CloudWatch: gửi log và thông số hệ thống.
 
 Đặc điểm:
-
 Tất cả kết nối nội bộ đều diễn ra bên trong VPC, không qua Internet.
-
 Độ trễ thấp, bảo mật cao, giảm thiểu rủi ro tấn công từ bên ngoài.
 
 13.4. Luồng Quản trị (SSH)
-
 Mục tiêu: quản trị viên truy cập vào EC2 Flask App trong private subnet thông qua Bastion Host.
 
 Trình tự:
-
 Quản trị viên SSH từ máy cá nhân đến Bastion Host qua địa chỉ Public IP (port 22).
-
 Từ Bastion Host, SSH nội bộ đến EC2 Flask App bằng Private IP.
-
 Sau khi kết nối, có thể kiểm tra log, khởi động Flask, hoặc triển khai cập nhật.
 
 Luồng tóm tắt:
-
 Máy quản trị → Bastion Host (Public subnet) → EC2 Flask App (Private subnet).
 
 Đặc điểm:
-
 Chỉ Bastion Host có Public IP.
-
 Các EC2 Flask App không thể SSH trực tiếp từ Internet.
-
 Security Group sg-bastion cho phép SSH từ IP quản trị; sg-ec2 chỉ nhận SSH từ sg-bastion.
 
 13.5. Tổng hợp các luồng kết nối
@@ -653,14 +633,10 @@ Inbound	Ngoài → Trong	Người dùng truy cập Flask	User / Route53	EC2 Flas
 Outbound	Trong → Ngoài	Flask gửi API / Firebase	EC2 Flask App	Internet (qua NAT Gateway)
 Internal	Nội bộ	Flask ↔ RDS ↔ MinIO ↔ CloudWatch	EC2 Flask App	RDS / MinIO / CloudWatch
 SSH	Quản trị	Kết nối kiểm tra hệ thống	Admin PC	EC2 Flask App qua Bastion
+
 13.6. Kết luận
-
 Luồng dữ liệu trong hệ thống CloudifyShare được thiết kế phân tầng rõ ràng:
-
 Public subnet chỉ chứa các thành phần tiếp xúc Internet (ALB, NAT, Bastion).
-
 Private subnet chỉ chứa tài nguyên nội bộ (EC2, RDS, MinIO).
-
 Tất cả truy cập bên ngoài đều đi qua ALB hoặc NAT Gateway.
-
 Quản trị viên truy cập qua Bastion Host, đảm bảo an toàn tuyệt đối cho lớp ứng dụng.
