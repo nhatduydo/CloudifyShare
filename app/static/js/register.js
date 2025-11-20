@@ -12,7 +12,7 @@ form.addEventListener('submit', async (e) => {
       showToast('Đăng ký thành công', 'success')
       window.location.href = '/login'
     } else {
-      showToast(data.error || 'Đăng ký thất bại', 'error')
+      showToast('Đăng ký thất bại', 'error')
     }
   } catch {
     showToast('Không thể kết nối đến máy chủ', 'error')

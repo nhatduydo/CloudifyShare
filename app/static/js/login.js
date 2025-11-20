@@ -25,7 +25,7 @@ form.addEventListener('submit', async (e) => {
         window.location.href = '/dashboard';
       }, 1800);
     } else {
-      showToast(data.error || 'Sai thông tin đăng nhập', 'error');
+      showToast('Sai thông tin đăng nhập', 'error');
     }
   } catch {
     showToast('Không thể kết nối đến máy chủ', 'error');

@@ -17,7 +17,7 @@ async function loadChatList() {
       headers: { 'Authorization': token, 'Accept': 'application/json' }
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Không thể tải danh sách');
+    if (!res.ok) throw new Error('Không thể tải danh sách');
     renderUserList(data.chats);
   } catch (err) {
     userList.innerHTML = `<p class="p-3 text-red-500">${err.message}</p>`;
@@ -74,7 +74,7 @@ async function loadConversation(user) {
   const data = await res.json();
 
   if (!res.ok) {
-    chatBox.innerHTML = `<p class="text-red-500 text-center">${data.error}</p>`;
+    //chatBox.innerHTML = `<p class="text-red-500 text-center">${data.error}</p>`;
     return;
   }
 
@@ -124,7 +124,6 @@ messageForm?.addEventListener('submit', async (e) => {
   formData.append('message_type', fileInput.files.length ? 'image' : 'text');
   if (fileInput.files.length) formData.append('file', fileInput.files[0]);
 
-  // ✅ Optimistic UI
   const tempMsg = {
     sender_id: myId,
     content: messageInput.value,
@@ -142,7 +141,7 @@ messageForm?.addEventListener('submit', async (e) => {
 
   const data = await res.json();
   if (!res.ok) {
-    showToast(data.error || 'Lỗi gửi tin nhắn', 'error');
+    showToast('Lỗi gửi tin nhắn', 'error');
     return;
   }
 
