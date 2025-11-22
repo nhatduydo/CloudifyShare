@@ -2,6 +2,11 @@ from flask import Blueprint, render_template, request
 from flask_jwt_extended import decode_token
 
 main = Blueprint("main", __name__)
+@main.route("/health")
+def health_check(): 
+    import socket
+    return {"instance": socket.gethostname()}
+
 
 @main.context_processor
 def inject_user():
