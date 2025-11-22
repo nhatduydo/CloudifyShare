@@ -1,13 +1,14 @@
 import jwt
 from flask import Blueprint, jsonify, request
 from app.models import *
+from datetime import datetime
 
 from werkzeug.security import check_password_hash, generate_password_hash
 from app import db
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required
 import cloudinary.uploader
 from flask import current_app
-
+from app import reader_engine
 auth = Blueprint("auth", __name__)
 
 # api đăng nhập
@@ -19,7 +20,7 @@ def login():
     if not username or not password:
         return jsonify({"error": "Thiếu username hoặc password"}), 400
 
-    user = User.query.filter_by(username=username).first()
+    user = User.query.execution_options(bind=reader_engine).filter_by(username=username).first()
 
     if not user or not check_password_hash(user.password, password):
         return jsonify({"error": "Sai username hoặc password"}), 401
@@ -54,10 +55,12 @@ def register():
         if not username or not password or not email:
             return jsonify({"error": "Thiếu username hoặc password"}), 400
 
-        if User.query.filter_by(username=username).first():
+        # CHECK USERNAME → Replica
+        if User.query.execution_options(bind=reader_engine).filter_by(username=username).first():
             return jsonify({"error": "username đã tồn tại"}), 400
 
-        if User.query.filter_by(email=email).first():
+        # CHECK EMAIL → Replica
+        if User.query.execution_options(bind=reader_engine).filter_by(email=email).first():
             return jsonify({"error": "email đã tồn tại"}), 400
 
         avatar_url = None
@@ -100,7 +103,7 @@ def register():
 def update_avatar():
     try:
         current_user = get_jwt_identity()
-        user = User.query.filter_by(username=current_user).first()
+        user = User.query.execution_options(bind=reader_engine).filter_by(username=current_user).first()
         
         if not user:
             return jsonify({"error": "Người dùng không tồn tại"}), 404
@@ -112,7 +115,7 @@ def update_avatar():
         # upload lên cloudinary
         upload_result = cloudinary.uploader.upload(
             avatar_file,
-            foloder="avatars",
+            folder="avatars",
             public_id=f"user_{user.id}",
             overwrite=True,
             resource_type="image"
@@ -135,7 +138,7 @@ def update_avatar():
 def update_account():
     try:
         current_user = get_jwt_identity()
-        user = User.query.filter_by(username=current_user).first()
+        user = User.query.execution_options(bind=reader_engine).filter_by(username=current_user).first()
         
         if not user:
             return jsonify({"error": "Người dùng không tồn tại"}), 404
@@ -145,7 +148,8 @@ def update_account():
         email = data.get("email")
         password = data.get("password")
         
-        if email and User.query.filter(User.email == email, User.id != user.id).first():
+        if email and User.query.execution_options(bind=reader_engine)\
+            .filter(User.email == email, User.id != user.id).first():
             return jsonify({"error": "Email đã được sử dụng"}), 400
         
         if full_name:
@@ -179,7 +183,7 @@ def update_account():
 def get_current_user():
     try:
         current_user = get_jwt_identity()
-        user = User.query.filter_by(username=current_user).first()
+        user = User.query.execution_options(bind=reader_engine).filter_by(username=current_user).first()
 
         if not user:
             return jsonify({"error": "Người dùng không tồn tại"}), 404

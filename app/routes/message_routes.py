@@ -4,6 +4,8 @@ import cloudinary.uploader
 from firebase_admin import db as firebase_db
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from datetime import datetime
+from app import reader_engine
 
 messsage = Blueprint("message", __name__)
 
@@ -19,7 +21,7 @@ def send_message():
         message_type = data.get("message_type", "text").lower()
         file = request.files.get("file")
         
-        sender = User.query.filter_by(username=sender_username).first()
+        sender = User.query.execution_options(bind=reader_engine).filter_by(username=sender_username).first()
         if not sender:
             return jsonify({"error": "Người gửi không hợp lệ"}), 400
         if not receiver_id:
@@ -71,7 +73,7 @@ def send_message():
             "email": sender.email,
         }
 
-        receiver = User.query.get(receiver_id)
+        receiver = User.query.execution_options(bind=reader_engine).get(receiver_id)
         receiver_info = {
             "id": receiver.id,
             "username": receiver.username,
@@ -103,14 +105,14 @@ def send_message():
 def get_conversation(receiver_id):
     try:
         current_username = get_jwt_identity()
-        current_user = User.query.filter_by(username=current_username).first()
+        current_user = User.query.execution_options(bind=reader_engine).filter_by(username=current_username).first()
         
         if not current_user:
             return jsonify({"error", "Người dùng không hợp lệ"}), 400
         
-        messages = Message.query.filter(
-            ((Message.sender_id == current_user.id) & (Message.receiver_id == receiver_id) | 
-             (Message.sender_id == receiver_id) & (Message.receiver_id == current_user.id))
+        messages = Message.query.execution_options(bind=reader_engine).filter(
+            ((Message.sender_id == current_user.id) & (Message.receiver_id == receiver_id)) |
+            ((Message.sender_id == receiver_id) & (Message.receiver_id == current_user.id))
         ).order_by(Message.created_at.asc()).all()
         
         result = []
@@ -135,7 +137,7 @@ def get_conversation(receiver_id):
 def get_chat_list():
     try:
         current_username = get_jwt_identity()
-        current_user = User.query.filter_by(username=current_username).first()
+        current_user = User.query.execution_options(bind=reader_engine).filter_by(username=current_username).first()
 
         if not current_user:
             return jsonify({"error": "Không tìm thấy người dùng"}), 400
@@ -182,7 +184,7 @@ def search_user():
         if not keyword:
             return jsonify({"error": "Thiếu keyword"}), 400
         
-        query = User.query.filter(User.username != current_username)
+        query = User.query.execution_options(bind=reader_engine).filter(User.username != current_username)
         
         if keyword.isdigit():
             query = query.filter(User.id == int(keyword))

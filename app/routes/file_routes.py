@@ -10,6 +10,7 @@ from datetime import timedelta
 import json
 from flask import send_file
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from app import reader_engine
 
 load_dotenv()
 file = Blueprint("file", __name__)
@@ -46,7 +47,8 @@ if not minio_client.bucket_exists(MINIO_BUCKET):
 def upload_file():
     try:
         current_user = get_jwt_identity()
-        user = User.query.filter_by(username=current_user).first()
+        user = User.query.execution_options(bind=reader_engine).filter_by(username=current_user).first()
+        
         if not user:
             return jsonify({"error": "Không tìm thấy user"}), 404
 
@@ -74,7 +76,7 @@ def upload_file():
             upload_by=user.id,
             is_public=False
         )
-        db.session.add(new_file)
+        db.session.add(new_file) # write → master
         db.session.commit()
 
         # Cập nhật URL download
@@ -101,11 +103,13 @@ def upload_file():
 @jwt_required()
 def list_files():
     current_user = get_jwt_identity()
-    user = User.query.filter_by(username=current_user).first()
+    user = User.query.execution_options(bind=reader_engine).filter_by(username=current_user).first()
     if not user:
         return jsonify({"error": "Không tìm thấy user"}), 404
 
-    files = File.query.filter_by(upload_by=user.id).order_by(File.created_at.desc()).all()
+    files = File.query.execution_options(bind=reader_engine)\
+        .filter_by(upload_by=user.id)\
+        .order_by(File.created_at.desc()).all()
     file_list = [{
         "id": f.id,
         "filename": f.filename,
@@ -124,8 +128,8 @@ def list_files():
 def delete_file(file_id):
     try:
         current_user = get_jwt_identity()
-        user = User.query.filter_by(username=current_user).first()
-        file = File.query.filter_by(id=file_id, upload_by=user.id).first()
+        user = User.query.execution_options(bind=reader_engine).filter_by(username=current_user).first()
+        file = File.query.execution_options(bind=reader_engine).filter_by(id=file_id, upload_by=user.id).first()
 
         if not file:
             return jsonify({"error": "Không tìm thấy file"}), 404
@@ -143,7 +147,8 @@ def delete_file(file_id):
 @jwt_required(optional=True)
 def download_file(file_id):
     try:
-        file_record = File.query.filter_by(id=file_id).first()
+        file_record = File.query.execution_options(bind=reader_engine).filter_by(id=file_id).first()
+        
         if not file_record:
             return jsonify({"error": "Không tìm thấy file hoặc bạn không có quyền tải"}), 404
 
@@ -160,7 +165,8 @@ def download_file(file_id):
             authorized = False
 
             if current_username:
-                current_user = User.query.filter_by(username=current_username).first()
+                current_user = User.query.execution_options(bind=reader_engine).filter_by(username=current_username).first()
+                
                 if not current_user:
                     return jsonify({"error": "Không tìm thấy user"}), 404
 
@@ -237,12 +243,12 @@ def download_file(file_id):
 def make_file_public(file_id):
     try:
         current_username = get_jwt_identity()
-        current_user = User.query.filter_by(username=current_username).first()
+        current_user = User.query.execution_options(bind=reader_engine).filter_by(username=current_username).first()
 
         if not current_user:
             return jsonify({"error": "Không tìm thấy user"}), 404
 
-        file_record = File.query.filter_by(id=file_id, upload_by=current_user.id).first()
+        file_record = File.query.execution_options(bind=reader_engine).filter_by(id=file_id, upload_by=current_user.id).first()
         if not file_record:
             return jsonify({"error": "Không tìm thấy file"}), 404
 
@@ -267,8 +273,11 @@ def make_file_public(file_id):
 @jwt_required()
 def make_file_private(file_id):
     try:
-        user = User.query.filter_by(username=get_jwt_identity()).first()
-        file = File.query.filter_by(id=file_id, upload_by=user.id).first()
+        current_username = get_jwt_identity()
+        
+        user = User.query.execution_options(bind=reader_engine).filter_by(username=current_username).first()
+        file = File.query.execution_options(bind=reader_engine).filter_by(id=file_id, upload_by=user.id).first()
+        
         if not file:
             return jsonify({"error": "Không tìm thấy file"}), 404
 

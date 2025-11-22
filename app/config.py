@@ -6,10 +6,12 @@ class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "supersecret")
     
     # Database
-    SQLALCHEMY_DATABASE_URI = os.getenv(
-        "DATABASE_URL",
-        "mysql+pymysql://admin:Admin%23123@cloudsharedb.cclau0qkccdx.us-east-1.rds.amazonaws.com:3306/cloudsharedb"
-    )
+    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    DB_WRITER = os.getenv("DATABASE_URL")
+    DB_READER = os.getenv("DATABASE_READ_REPLICA")
+    
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,

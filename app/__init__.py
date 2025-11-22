@@ -8,10 +8,26 @@ import cloudinary
 import firebase_admin
 from firebase_admin import credentials, db as firebase_db 
 from flask_jwt_extended import JWTManager
-
+from sqlalchemy import create_engine
+from app.config import Config
 load_dotenv()
 
 db = SQLAlchemy()
+
+# Engine ghi (master)
+writer_engine = create_engine(
+    Config.DB_WRITER,
+    pool_pre_ping=True,
+    pool_recycle=280
+)
+
+# Engine đọc (replica)
+reader_engine = create_engine(
+    Config.DB_READER,
+    pool_pre_ping=True,
+    pool_recycle=280
+)
+
 migrate = Migrate()
 jwt = JWTManager()
 

@@ -1,11 +1,11 @@
 # 1. Mục tiêu tổng quát
 - VPC có 2 Availability Zones (AZ), chia thành các subnet public và private.
 - Application Load Balancer (ALB) phân phối yêu cầu đến các EC2 Flask App nằm trong Auto Scaling Group.
-- RDS MySQL hoạt động ở chế độ Multi-AZ (Primary và Replica).
+- RDS MySQL hoạt động ở chế độ Single (Primary và Replica).
 - MinIO được sử dụng để thay thế AWS S3, lưu trữ file người dùng.
 - Firebase đảm nhiệm chức năng nhắn tin và thông báo thời gian thực.
 - Bastion Host được triển khai ở public subnet để SSH vào các EC2 trong private subnet.
-- CloudWatch giám sát tài nguyên và AWS Backup sao lưu dữ liệu định kỳ.
+- CloudWatch giám sát tài nguyên.
 
 # 2. Tạo VPC và Subnet
 Truy cập AWS Console → VPC → Create VPC.
@@ -39,9 +39,9 @@ Tạo 5 nhóm bảo mật chính:
 Mục đích: cho phép người dùng ngoài Internet truy cập vào hệ thống qua HTTP/HTTPS qua Route 53
 Inbound rules:
 Type	   Protocol	    Port	       Source	          Mục đích
-HTTP  	  TCP	        80	          0.0.0.0/0	      Cho phép truy cập HTTP từ Internet
+HTTP  	    TCP	        80	          0.0.0.0/0	      Cho phép truy cập HTTP từ Internet
 HTTPS	    TCP	        443	          0.0.0.0/0	      Cho phép truy cập HTTPS từ Internet
-ICMP      All	        -	            0.0.0.0/0	      Ping test (tuỳ chọn)
+ICMP        All	        -	          0.0.0.0/0	      Ping test (tuỳ chọn)
 Outbound rules: giữ mặc định (All traffic).
 Luồng: Người dùng → Route 53 → ALB qua port 80/443.
 
@@ -49,8 +49,8 @@ Luồng: Người dùng → Route 53 → ALB qua port 80/443.
 Mục đích: cho phép máy quản trị SSH vào hệ thống.
 Inbound rules:
   Type	      Protocol	        Port	        Source	            Ghi chú
-  SSH	          TCP	            22	         <IP máy bạn>/32	    Chỉ IP cá nhân của bạn được SSH
-  ICMP	        All	            All	          0.0.0.0/0	          Ping test (tùy chọn)
+  SSH	        TCP	            22	         <IP máy bạn>/32	    Chỉ IP cá nhân của bạn được SSH
+  ICMP	        All	            All	          0.0.0.0/0	            Ping test (tùy chọn)
 
 Outbound rules: giữ mặc định.
 Luồng: Máy quản trị → Bastion (Public IP) → EC2 Flask (Private IP).
@@ -61,7 +61,7 @@ Mục đích: cho phép ALB truy cập Flask app và Bastion SSH vào.
 Inbound rules:
   Type	      Protocol	      Port	      Source	      Ghi chú
   HTTP	        TCP	          80	        sg-lb	        Chỉ ALB được phép truy cập Flask
-  SSH	        TCP	          22	        sg-bastion	  Cho phép Bastion Host SSH vào
+  SSH	        TCP	          22	        sg-bastion	    Cho phép Bastion Host SSH vào
   ICMP	        All	          All	        0.0.0.0/0	    Ping nội bộ kiểm tra
 Outbound rules: giữ mặc định (All traffic).
 Luồng: ALB → EC2 Flask App.
@@ -83,7 +83,7 @@ Cho phép EC2 Flask App truy cập dịch vụ MinIO nội bộ để đọc/ghi
 Không mở public Internet để đảm bảo bảo mật dữ liệu người dùng.
 
 Inbound rules:
-  Type	      Protocol	      Port	      Source	      Mục đích
+  Type	      Protocol	          Port	      Source	      Mục đích
   Custom TCP	  TCP	          9000	      sg-ec2	      Flask App gọi API upload/download
   Custom TCP	  TCP	          9001	      sg-ec2	      Flask App hoặc quản trị truy cập console
   ICMP	All	-	0.0.0.0/0	Ping test (tuỳ chọn)
@@ -183,8 +183,6 @@ Nếu có thêm MinIO backup ở AZ khác:
 MINIO_BACKUP_ENDPOINT=http://10.0.2.25:9000
 ```
 
-
-
 # 6. Tạo RDS MySQL (trong AWS Academy)
 
 ## tạo DB Subnet Group
@@ -236,7 +234,6 @@ Log exports
         Error Log                  v
         General Log                x
         Slow Query Log             x
-        
 
 Flask cấu hình (.env):
 ```
@@ -268,6 +265,92 @@ Nếu OK → sẽ thấy:   mysql>
 
 SHOW DATABASES;
 CREATE DATABASE cloudifyshare;
+
+# 6.2 tạo database dự phòng 
+## Bước 1: Tạo RDS MySQL Read Replica cho cloudsharedb
+AWS Console → RDS → Databases => cloudsharedb
+Nhấn vào “Actions” → Create read replica.
+
+Cấu hình Read Replica:
+DB Identifier:              cloudsharedb-replica
+Instance type:              Chọn instance size tương tự hoặc nhỏ hơn (ví dụ: db.t3.micro).
+VPC:                        Chọn cùng VPC với cloudsharedb.
+Subnet group:               Chọn Private subnets.
+Public access:              Chọn No (Để replica không được public).
+VPC Security group:         Chọn sg-rds (Security group của RDS).
+Multi-AZ:                   Bỏ chọn.
+Database authentication:    Chọn Password authentication.
+Nhấn Create read replica.
+
+## Bước 2: Kiểm tra trạng thái của Read Replica
+Sau khi hoàn tất, AWS sẽ tạo Read Replica cho cloudsharedb.
+Kết nối đến replica qua endpoint cloudsharedb-replica.cjzdt6vrob6s.us-east-1.rds.amazonaws.com (replica endpoint) để kiểm tra tính sẵn sàng của nó.
+
+## Bước 3: Cập nhật ứng dụng Flask để kết nối với Replica
+Trong file .env của Flask, bạn cần thay đổi DB_HOST để trỏ đến replica.
+DB_HOST=cloudsharedb-replica.cjzdt6vrob6s.us-east-1.rds.amazonaws.com
+DB_USER=admin
+DB_PASS=admin123
+DB_NAME=cloudsharedb
+
+## Bước 4: Failover (nếu cần thiết)
+Nếu cloudsharedb (Master DB) gặp sự cố và bạn cần chuyển sang replica, bạn có thể promote replica thành master để tiếp tục hoạt động:
+Truy cập RDS → Databases.
+Chọn cloudsharedb-replica.
+Nhấn “Promote” để chuyển cloudsharedb-replica thành Master.
+Ứng dụng Flask sẽ cần cập nhật lại thông tin DB_HOST để trỏ tới cloudsharedb-replica (nay đã là Master).
+
+## Giải pháp 2: Sử dụng Snapshot và Backup thủ công
+Nếu bạn không muốn sử dụng MySQL replication, bạn có thể làm theo cách đơn giản hơn:
+Tạo snapshot của cloudsharedb.
+Tạo một RDS instance mới từ snapshot này, đặt tên ví dụ là cloudsharedb-backup.
+Cập nhật .env trong Flask nếu bạn cần sử dụng backup.
+Lưu ý: Phương pháp này yêu cầu bạn khôi phục thủ công khi có sự cố xảy ra, và không có tính năng tự động failover như MySQL replication.
+
+## công dụng 
+Giảm tải cho Master DB
+Chia tải đọc: Nếu ứng dụng của bạn có rất nhiều truy vấn đọc (SELECT) và chỉ một số ít ghi (INSERT, UPDATE, DELETE), thì Read Replica sẽ giúp chia sẻ tải cho Master DB.
+Hiệu suất: Việc chuyển các truy vấn đọc sang Read Replica giúp Master DB tập trung vào các truy vấn ghi và giảm tải cho nó, cải thiện hiệu suất tổng thể của hệ thống.
+Lợi ích: Hệ thống có thể xử lý nhiều truy vấn đọc mà không làm ảnh hưởng đến việc ghi dữ liệu trên Master DB.
+
+2. Nâng cao độ tin cậy và khả năng phục hồi (Disaster Recovery)
+Khả năng phục hồi: Nếu Master DB gặp sự cố, bạn có thể promote Read Replica thành Master để hệ thống tiếp tục hoạt động mà không bị gián đoạn.
+Giảm thời gian downtime: Việc promote Read Replica thành Master giúp phục hồi hệ thống nhanh chóng mà không cần phải khôi phục từ sao lưu.
+
+3. Sao lưu dữ liệu mà không làm gián đoạn hoạt động
+Sao lưu mà không làm gián đoạn: Bạn có thể sử dụng Read Replica để sao lưu dữ liệu mà không ảnh hưởng đến Master DB. Vì các sao lưu dữ liệu thường chỉ yêu cầu đọc, bạn có thể làm việc với Read Replica để sao lưu mà không làm ảnh hưởng đến hiệu suất ghi của Master DB.
+
+4. Cải thiện khả năng mở rộng (Scalability)
+Mở rộng quy mô đọc: Nếu hệ thống của bạn cần xử lý một lượng lớn truy vấn đọc (ví dụ, khi bạn có nhiều người dùng truy cập hệ thống đồng thời), bạn có thể sử dụng nhiều Read Replica để xử lý các truy vấn đọc thay vì làm chậm lại Master DB.
+Hỗ trợ Load Balancing: Bạn có thể cấu hình load balancing để phân phối các truy vấn đọc giữa các Read Replica nhằm tối ưu hóa hiệu suất.
+
+5. Dễ dàng triển khai các phân tích và báo cáo
+Độc lập với Master DB: Nếu bạn cần thực hiện phân tích hoặc báo cáo nặng (các truy vấn phức tạp hoặc yêu cầu tính toán dữ liệu), bạn có thể chuyển chúng sang Read Replica, tránh làm ảnh hưởng đến hiệu suất của Master DB.
+Phân tách giữa đọc và ghi: Điều này giúp bạn đảm bảo rằng Master DB chỉ thực hiện các tác vụ quan trọng liên quan đến ghi dữ liệu.
+
+## “Nếu Master chết thì còn ghi dữ liệu được không?”
+Không.
+Replica là read-only, bạn không thể INSERT, UPDATE, DELETE lên Replica.
+➡ Khi master chết: app của bạn chỉ còn có thể đọc.
+
+Nhưng đây là tình huống thực tế:
+### Giải pháp khi master chết:
+### Bước 1 — Promote Replica thành Master (1 click)
+Trong AWS Console → RDS → chọn Replica → Actions → Promote.
+Sau khi promote:
+Replica trở thành Master mới
+Cho phép ghi lại bình thường
+
+### Bước 2 — Update lại .env
+Đổi .env:
+DATABASE_URL=mysql+pymysql://admin:admin123@<new-master-endpoint>:3306/cloudifyshare
+Rồi deploy lại Flask.
+Xong → hệ thống chạy bình thường như chưa từng xảy ra lỗi.
+Khi master chết → hệ thống của bạn KHÔNG bị down hoàn toàn
+Vì:
+Các API SELECT (dashboard, list file, xem message) → vẫn chạy
+Các API tạo mới (đăng ký, gửi tin nhắn, upload file) → sẽ báo lỗi tạm thời
+Nhưng toàn bộ dữ liệu vẫn nguyên vẹn vì Replica vẫn có bản sao.
 
 # 7. Tạo EC2 Flask App (Launch Template)
 #### Bước 1 — Mở Launch Template
@@ -535,6 +618,8 @@ Vào mục SSL/TLS → Edge Certificates:
 Bật “Always Use HTTPS”.
 Bật “Automatic HTTPS Rewrites” (nếu có).
 Như vậy, khi người dùng gõ http://app.systemaccommodation.online, Cloudflare sẽ tự redirect sang https://app.systemaccommodation.online.
+
+
 
 # 11. Kết quả tổng thể
 Thành phần	Nơi triển khai	Vai trò
