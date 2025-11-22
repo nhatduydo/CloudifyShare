@@ -147,7 +147,7 @@ def delete_file(file_id):
 @jwt_required(optional=True)
 def download_file(file_id):
     try:
-        file_record = File.query.execution_options(bind=reader_engine).filter_by(id=file_id).first()
+        file_record = File.query.filter_by(id=file_id).first()
         
         if not file_record:
             return jsonify({"error": "Không tìm thấy file hoặc bạn không có quyền tải"}), 404
@@ -165,7 +165,7 @@ def download_file(file_id):
             authorized = False
 
             if current_username:
-                current_user = User.query.execution_options(bind=reader_engine).filter_by(username=current_username).first()
+                current_user = User.query.filter_by(username=current_username).first()
                 
                 if not current_user:
                     return jsonify({"error": "Không tìm thấy user"}), 404
