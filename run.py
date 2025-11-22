@@ -4,7 +4,7 @@ from flask import Flask, jsonify
 app = create_app()
 
 
-@app.route('/')
+@app.route('/api')
 def index():
     return jsonify({"message": "CloudifyShare Flask app running successfully!"}), 200
 

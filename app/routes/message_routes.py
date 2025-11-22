@@ -108,7 +108,7 @@ def get_conversation(receiver_id):
         current_user = User.query.execution_options(bind=reader_engine).filter_by(username=current_username).first()
         
         if not current_user:
-            return jsonify({"error", "Người dùng không hợp lệ"}), 400
+            return jsonify({"error": "Người dùng không hợp lệ"}), 400
         
         messages = Message.query.execution_options(bind=reader_engine).filter(
             ((Message.sender_id == current_user.id) & (Message.receiver_id == receiver_id)) |
