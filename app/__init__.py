@@ -9,11 +9,11 @@ import firebase_admin
 from firebase_admin import credentials, db as firebase_db 
 from flask_jwt_extended import JWTManager
 from sqlalchemy import create_engine
-from app.config import Config
 load_dotenv()
 
 db = SQLAlchemy()
 
+from app.config import Config
 # Engine ghi (master)
 writer_engine = create_engine(
     Config.DB_WRITER,
