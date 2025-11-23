@@ -402,6 +402,73 @@ Dùng lệnh:
 Nếu thấy python3 run.py đang chạy → script hoạt động tốt 
 
 
+
+# 8. Tạo Auto Scaling Group
+- EC2 → Auto Scaling Groups → Create
+- Name: asg-flask
+- Launch template: flask-template
+- Version: Latest
+- VPC: cloudify-vpc
+- Availability Zones and subnets: private1 và private2
+- Balanced best effort
+
+#### Integrate with other services - optional - Load balancing 
+- Select Load balancing options: Attach to an existing load balancer
+- chọn tg-flask
+
+- Load balancer type: Application Load Balancer (ALB) (HTTP, HTTPS)
+- Load balancer name: asg-flask-lb
+- Load balancer scheme: Internet-facing
+- Availability Zones and subnets: Chọn 2 public subnets
+- Listeners and routing: Protocol: HTTP - Port: 80
+- Default routing (target group): Create a target group
+
+#### Health Checks:
+EC2 health checks: Enabled
+ELB health checks: Enabled
+Health check grace period: 300 giây
+
+#### VPC Lattice integration options
+- Select VPC Lattice service to attach: No VPC Lattice service
+- Application Recovery Controller (ARC) zonal shift: không tick Health checks
+- EC2 health checks: Always enabled
+- Turn on Elastic Load Balancing health checks: Bật
+- Turn on Amazon EBS health checks: Không bật
+- Health check grace period: 300
+
+#### Tag (optional)
+Key: Project
+Value: CloudifyShare
+
+### CONFIGURE GROUP SIZE AND SCALING
+- Desired capacity: 2
+- Minimum capacity: 1
+- Maximum capacity: 3
+- Choose whether to use a target tracking policy: Target tracking scaling policy
+- Metric type: Average CPU utilization
+- Target value: 60
+Instance maintenance policy
+- chọn: Launch before terminating
+- Capacity Reservation preference: Default
+- Enable instance scale-in protection: Không bật
+- Enable group metrics collection within CloudWatch: Bật
+- Enable default instance warmu:p Bật, 180 seconds
+
+- Add tags: Project = CloudifyShare
+==> Create Auto Scaling group
+
+### kiểm tra hoạt động thực tế của hệ thống
+Sau khi nhấn Create và đợi vài phút (~3-5 phút):
+    Vào EC2 → Auto Scaling Groups → Instance management → kiểm tra Health = Healthy.
+    Vào EC2 → Load Balancers → cloudify-lb → copy DNS name → dán vào trình duyệt.
+
+
+- AWS Console → EC2 → Load Balancers
+- Chọn Application Load Balancer bạn đã tạo
+- Chuyển sang tab “instance management” bạn sẽ thấy dòng: 
+    Kiểm tra Status = running và Health = healthy.
+
+
 # hướng dẫn kêt nối load banlancer - ec2 instance  private
 ## Bước 1. Tạo ALB
 Vào:
@@ -469,73 +536,6 @@ Rồi nhấn Next.
   → Chọn EC2 Flask instance private subnet mà bạn đã chạy Flask.
   → Click Add to registered (bên dưới)
   → Nhấn Create target group.
-
-
-
-# 8. Tạo Auto Scaling Group
-- EC2 → Auto Scaling Groups → Create
-- Name: asg-flask
-- Launch template: flask-template
-- Version: Latest
-- VPC: cloudify-vpc
-- Availability Zones and subnets: private1 và private2
-- Balanced best effort
-
-#### Integrate with other services - optional - Load balancing 
-- Select Load balancing options: Attach to an existing load balancer
-- chọn tg-flask
-
-- Load balancer type: Application Load Balancer (ALB) (HTTP, HTTPS)
-- Load balancer name: asg-flask-lb
-- Load balancer scheme: Internet-facing
-- Availability Zones and subnets: Chọn 2 public subnets
-- Listeners and routing: Protocol: HTTP - Port: 80
-- Default routing (target group): Create a target group
-
-#### Health Checks:
-EC2 health checks: Enabled
-ELB health checks: Enabled
-Health check grace period: 300 giây
-
-#### VPC Lattice integration options
-- Select VPC Lattice service to attach: No VPC Lattice service
-- Application Recovery Controller (ARC) zonal shift: không tick Health checks
-- EC2 health checks: Always enabled
-- Turn on Elastic Load Balancing health checks: Bật
-- Turn on Amazon EBS health checks: Không bật
-- Health check grace period: 300
-
-#### Tag (optional)
-Key: Project
-Value: CloudifyShare
-
-### CONFIGURE GROUP SIZE AND SCALING
-- Desired capacity: 2
-- Minimum capacity: 1
-- Maximum capacity: 3
-- Choose whether to use a target tracking policy: Target tracking scaling policy
-- Metric type: Average CPU utilization
-- Target value: 60
-Instance maintenance policy
-- chọn: Launch before terminating
-- Capacity Reservation preference: Default
-- Enable instance scale-in protection: Không bật
-- Enable group metrics collection within CloudWatch: Bật
-- Enable default instance warmu:p Bật, 180 seconds
-
-- Add tags: Project = CloudifyShare
-==> Create Auto Scaling group
-
-### kiểm tra hoạt động thực tế của hệ thống
-Sau khi nhấn Create và đợi vài phút (~3-5 phút):
-    Vào EC2 → Auto Scaling Groups → Instance management → kiểm tra Health = Healthy.
-    Vào EC2 → Load Balancers → cloudify-lb → copy DNS name → dán vào trình duyệt.
-
-
-- AWS Console → EC2 → Load Balancers
-- Chọn Application Load Balancer bạn đã tạo
-- Chuyển sang tab “instance management” bạn sẽ thấy dòng: 
-    Kiểm tra Status = running và Health = healthy.
 
 
 # 9. CloudWatch Monitoring 
@@ -618,7 +618,6 @@ Vào mục SSL/TLS → Edge Certificates:
 Bật “Always Use HTTPS”.
 Bật “Automatic HTTPS Rewrites” (nếu có).
 Như vậy, khi người dùng gõ http://app.systemaccommodation.online, Cloudflare sẽ tự redirect sang https://app.systemaccommodation.online.
-
 
 
 # 11. Kết quả tổng thể
