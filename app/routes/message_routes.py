@@ -125,6 +125,7 @@ def send_message():
             "receiver_id": new_msg.receiver_id,
             "content": new_msg.content,
             "message_type": new_msg.message_type.value,
+            "file_id": file_obj.id if file_obj else None,
             "file_url": file_obj.file_url if file_obj else None,
             "timestamp": new_msg.created_at.isoformat()
         })
@@ -152,6 +153,9 @@ def send_message():
                 "id": new_msg.id,
                 "content": new_msg.content,
                 "message_type": new_msg.message_type.value,
+                "file_id": file_obj.id if file_obj else None,
+                "file_name": file_obj.filename if file_obj else None,
+                "file_type": file_obj.file_type if file_obj else None,
                 "file_url": file_obj.file_url if file_obj else None,
                 "created_at": new_msg.created_at,
                 "sender": sender_info,
@@ -235,13 +239,26 @@ def get_conversation(receiver_id):
 
         result = []
         for mess in messages:
+            file_payload = None
+            if mess.attached_file:
+                mode = "inline" if mess.message_type == MessageType.IMAGE else "attachment"
+                file_payload = {
+                    "file_id": mess.attached_file.id,
+                    "file_name": mess.attached_file.filename,
+                    "file_type": mess.attached_file.file_type,
+                    "file_url": _build_download_url(mess.attached_file.id, mode)
+                }
+
             result.append({
                 "id": mess.id,
                 "sender_id": mess.sender_id,
                 "receiver_id": mess.receiver_id,
                 "content": mess.content,
                 "message_type": mess.message_type.value,
-                "file_url": mess.attached_file.file_url if mess.attached_file else None,
+                "file_id": file_payload["file_id"] if file_payload else None,
+                "file_name": file_payload["file_name"] if file_payload else None,
+                "file_type": file_payload["file_type"] if file_payload else None,
+                "file_url": file_payload["file_url"] if file_payload else None,
                 "created_at": mess.created_at
             })
         return jsonify({"messages": result}), 200

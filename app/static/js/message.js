@@ -159,7 +159,13 @@ function renderMessage(msg, isSender = false) {
   bubble.className = `max-w-xs px-3 py-2 rounded-lg text-sm shadow
     ${isSender ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-800'}`;
 
-  if (msg.file_url) {
+  const fallbackUrl =
+    msg.file_id
+      ? `/messages/files/${msg.file_id}/download?mode=${msg.message_type === 'image' ? 'inline' : 'attachment'}`
+      : null;
+  const fileUrl = msg.file_url || fallbackUrl;
+
+  if (fileUrl) {
     if (msg.message_type === 'image') {
       const img = document.createElement('img');
       img.className = 'max-w-[150px] rounded-lg';
@@ -167,7 +173,7 @@ function renderMessage(msg, isSender = false) {
       if (msg.local_url) {
         img.src = msg.local_url;
       } else {
-        loadProtectedImage(img, msg.file_url);
+        loadProtectedImage(img, fileUrl);
       }
       if (msg.content) {
         const caption = document.createElement('p');
@@ -177,15 +183,15 @@ function renderMessage(msg, isSender = false) {
       }
     } else {
       const caption = document.createElement('p');
-      caption.textContent = msg.content || 'Đã gửi một file';
+      caption.textContent = msg.content || msg.file_name || 'Đã gửi một file';
       bubble.appendChild(caption);
       const button = msg.local_url
         ? createDownloadButton(msg.local_url, 'Mở file tạm', msg.file_name, true)
-        : createDownloadButton(msg.file_url, 'Tải file', msg.file_name);
+        : createDownloadButton(fileUrl, 'Tải file', msg.file_name);
       bubble.appendChild(button);
     }
   } else {
-    bubble.textContent = msg.content || '(Không có nội dung)';
+    bubble.textContent = msg.content || msg.file_name || '(Không có nội dung)';
   }
 
   div.appendChild(bubble);
