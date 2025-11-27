@@ -83,8 +83,11 @@ async function deleteFile(id) {
 
 async function downloadFile(id) {
   try {
+    // Tạo link download với mode=attachment để ép buộc download
+    // Thêm timestamp để tránh browser cache
     const downloadLink = `${API_BASE}/download/${id}?mode=attachment&_t=${Date.now()}`
 
+    // Tạo thẻ a ẩn để trigger download (ép buộc download file)
     const link = document.createElement('a')
     link.href = downloadLink
     link.download = '' // Ép buộc download
@@ -92,6 +95,7 @@ async function downloadFile(id) {
     document.body.appendChild(link)
     link.click()
 
+    // Xóa link sau một chút để đảm bảo download đã bắt đầu
     setTimeout(() => {
       document.body.removeChild(link)
     }, 100)
@@ -100,6 +104,17 @@ async function downloadFile(id) {
   }
 }
 
+// async function toggleShare(id, isPublic) {
+//   const endpoint = isPublic ? 'make_private' : 'make_public'
+//   const res = await fetch(`${API_BASE}/${endpoint}/${id}`, {
+//     method: 'PUT',
+//     headers: { 'Authorization': token }
+//   })
+//   const data = await res.json()
+//   console.log('Toggle response:', data)
+//   showToast(data.message || data.error, 'error')
+//   loadFiles()
+// }
 
 function addPublicLinkRow(row, url) {
   removePublicLinkRow(row)

@@ -145,6 +145,12 @@ def delete_file(file_id):
 
 @file.route("/download/<int:file_id>", methods=["GET"])
 def download_file(file_id):
+    """
+    Download file - không cần JWT token, luôn stream file trực tiếp
+
+    - Mặc định: mode=attachment (ép buộc download file)
+    - Khi có mode=inline: xem file trực tiếp trong browser (dùng cho link public)
+    """
     try:
         file_record = File.query.filter_by(id=file_id).first()
 
