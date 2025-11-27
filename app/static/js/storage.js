@@ -77,7 +77,7 @@ async function deleteFile(id) {
     headers: { 'Authorization': token }
   })
   const data = await res.json()
-  showToast('data.message data.error', 'info')
+  showToast('Xoá', 'info')
   loadFiles()
 }
 
@@ -134,7 +134,7 @@ async function toggleShare(id, isPublic) {
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || 'Lỗi chia sẻ')
 
-    showToast('data.message', 'info')
+    showToast('Chia sẽ', 'info')
 
     const row = [...document.querySelectorAll('#fileList tr')]
       .find(r => r.innerHTML.includes(`toggleShare(${id}`))
@@ -159,7 +159,6 @@ async function toggleShare(id, isPublic) {
     }
 
   } catch (err) {
-    showToast('err.message', 'error')
   }
 }
 

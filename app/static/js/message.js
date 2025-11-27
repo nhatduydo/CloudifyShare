@@ -141,7 +141,6 @@ messageForm?.addEventListener('submit', async (e) => {
 
   const data = await res.json();
   if (!res.ok) {
-    showToast('Lỗi gửi tin nhắn', 'error');
     return;
   }
 
