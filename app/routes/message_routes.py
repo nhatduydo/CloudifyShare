@@ -1,7 +1,7 @@
 from app import db
 from app.models import *
 from firebase_admin import db as firebase_db
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 from app import reader_engine
@@ -10,6 +10,7 @@ from minio import Minio
 import os
 import io
 import mimetypes
+from urllib.parse import quote
 
 messsage = Blueprint("message", __name__)
 
@@ -41,7 +42,7 @@ if not minio_client.bucket_exists(MINIO_BUCKET):
 def _build_download_url(file_id: int, mode: str) -> str:
     base = FRONTEND_BASE_URL or ""
     prefix = base or ""
-    return f"{prefix}/files/download/{file_id}?mode={mode}"
+    return f"{prefix}/messages/files/{file_id}/download?mode={mode}"
 
 # api gửi tin nhắn
 
@@ -160,6 +161,58 @@ def send_message():
 
     except Exception as e:
         db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+@messsage.route("/files/<int:file_id>/download", methods=["GET"])
+@jwt_required()
+def download_message_file(file_id):
+    try:
+        current_username = get_jwt_identity()
+        current_user = User.query.execution_options(bind=reader_engine).filter_by(username=current_username).first()
+
+        if not current_user:
+            return jsonify({"error": "Người dùng không hợp lệ"}), 400
+
+        message = Message.query.execution_options(bind=reader_engine).filter_by(file_id=file_id).first()
+        if not message:
+            return jsonify({"error": "Không tìm thấy file trong cuộc trò chuyện"}), 404
+
+        if current_user.id not in {message.sender_id, message.receiver_id}:
+            return jsonify({"error": "Bạn không có quyền truy cập file này"}), 403
+
+        file_record = message.attached_file
+        if not file_record:
+            file_record = File.query.execution_options(bind=reader_engine).filter_by(id=file_id).first()
+
+        if not file_record:
+            return jsonify({"error": "Không tìm thấy file"}), 404
+
+        try:
+            file_obj = minio_client.get_object(MINIO_BUCKET, file_record.filename)
+            file_data = file_obj.read()
+            file_obj.close()
+            file_obj.release_conn()
+        except Exception as e:
+            return jsonify({"error": f"Không thể lấy file từ MinIO: {str(e)}"}), 500
+
+        mode_param = request.args.get("mode", "attachment")
+        disposition_mode = "inline" if mode_param == "inline" else "attachment"
+
+        response = Response(
+            file_data,
+            mimetype=file_record.file_type or "application/octet-stream",
+            headers={
+                "Content-Disposition": f"{disposition_mode}; filename={quote(file_record.filename)}",
+                "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0",
+                "X-Content-Type-Options": "nosniff"
+            }
+        )
+        return response
+
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 # api lấy lịch sử chat

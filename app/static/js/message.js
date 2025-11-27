@@ -91,6 +91,66 @@ async function loadConversation(user) {
   chatBox.scrollTop = chatBox.scrollHeight;
 }
 
+function createDownloadButton(fileUrl, label = 'Tải file', fileNameHint = '', isLocal = false) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'underline text-sm mt-1 flex items-center gap-1';
+  btn.textContent = label;
+  if (isLocal) {
+    btn.addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.href = fileUrl;
+      link.download = fileNameHint || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    });
+  } else {
+    btn.addEventListener('click', () => downloadProtectedFile(fileUrl, fileNameHint));
+  }
+  return btn;
+}
+
+async function downloadProtectedFile(url, fileNameHint = '') {
+  try {
+    const res = await fetch(url, {
+      headers: { 'Authorization': token }
+    });
+    if (!res.ok) throw new Error('Không thể tải file');
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const extracted = /filename="?([^";]+)"?/i.exec(disposition);
+    const finalName = extracted ? decodeURIComponent(extracted[1]) : (fileNameHint || 'attachment');
+
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = finalName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+  } catch (err) {
+    console.error(err);
+    showToast?.(err.message || 'Tải file thất bại', 'error');
+  }
+}
+
+async function loadProtectedImage(imgEl, url) {
+  try {
+    const res = await fetch(url, {
+      headers: { 'Authorization': token }
+    });
+    if (!res.ok) throw new Error('Không thể tải ảnh');
+    const blob = await res.blob();
+    imgEl.src = URL.createObjectURL(blob);
+  } catch (err) {
+    console.error(err);
+    imgEl.alt = 'Ảnh bị lỗi';
+    imgEl.classList.add('text-xs', 'text-red-500');
+  }
+}
+
 function renderMessage(msg, isSender = false) {
   const div = document.createElement('div');
   div.className = `flex ${isSender ? 'justify-end' : 'justify-start'} mb-2`;
@@ -99,11 +159,31 @@ function renderMessage(msg, isSender = false) {
   bubble.className = `max-w-xs px-3 py-2 rounded-lg text-sm shadow
     ${isSender ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-800'}`;
 
-  if (msg.message_type === 'image' && msg.file_url) {
-    const img = document.createElement('img');
-    img.src = msg.file_url;
-    img.className = 'max-w-[150px] rounded-lg';
-    bubble.appendChild(img);
+  if (msg.file_url) {
+    if (msg.message_type === 'image') {
+      const img = document.createElement('img');
+      img.className = 'max-w-[150px] rounded-lg';
+      bubble.appendChild(img);
+      if (msg.local_url) {
+        img.src = msg.local_url;
+      } else {
+        loadProtectedImage(img, msg.file_url);
+      }
+      if (msg.content) {
+        const caption = document.createElement('p');
+        caption.className = 'mt-1 text-xs opacity-80';
+        caption.textContent = msg.content;
+        bubble.appendChild(caption);
+      }
+    } else {
+      const caption = document.createElement('p');
+      caption.textContent = msg.content || 'Đã gửi một file';
+      bubble.appendChild(caption);
+      const button = msg.local_url
+        ? createDownloadButton(msg.local_url, 'Mở file tạm', msg.file_name, true)
+        : createDownloadButton(msg.file_url, 'Tải file', msg.file_name);
+      bubble.appendChild(button);
+    }
   } else {
     bubble.textContent = msg.content || '(Không có nội dung)';
   }
@@ -119,16 +199,24 @@ messageForm?.addEventListener('submit', async (e) => {
   if (!receiverId) return showToast('Chưa chọn người nhận!', 'error');
 
   const formData = new FormData();
+  const selectedFile = fileInput.files[0];
+  const hasFile = Boolean(selectedFile);
+  const derivedType = hasFile
+    ? (selectedFile.type && selectedFile.type.startsWith('image/') ? 'image' : 'file')
+    : 'text';
+
   formData.append('receiver_id', receiverId);
   formData.append('content', messageInput.value);
-  formData.append('message_type', fileInput.files.length ? 'image' : 'text');
-  if (fileInput.files.length) formData.append('file', fileInput.files[0]);
+  formData.append('message_type', derivedType);
+  if (hasFile) formData.append('file', selectedFile);
 
   const tempMsg = {
     sender_id: myId,
     content: messageInput.value,
-    message_type: fileInput.files.length ? 'image' : 'text',
-    file_url: fileInput.files.length ? URL.createObjectURL(fileInput.files[0]) : null
+    message_type: derivedType,
+    file_url: hasFile ? '' : null,
+    local_url: hasFile ? URL.createObjectURL(selectedFile) : null,
+    file_name: hasFile ? selectedFile.name : ''
   };
   renderMessage(tempMsg, true);
   chatBox.scrollTop = chatBox.scrollHeight;
@@ -168,6 +256,9 @@ fileInput.addEventListener('change', () => {
 
 removeFileBtn.addEventListener('click', () => {
   fileInput.value = '';
+  if (tempMsg.local_url) {
+    URL.revokeObjectURL(tempMsg.local_url);
+  }
   fileNameDisplay.textContent = '';
   removeFileBtn.classList.add('hidden');
 });

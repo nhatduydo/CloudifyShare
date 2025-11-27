@@ -151,6 +151,10 @@ def download_file(file_id):
         if not file_record:
             return jsonify({"error": "Không tìm thấy file"}), 404
 
+        # Link công khai chỉ hoạt động khi file đang ở trạng thái public
+        if not file_record.is_public:
+            return jsonify({"error": "File đã được đặt ở chế độ riêng tư"}), 403
+
         # Lấy file từ MinIO
         try:
             file_obj = minio_client.get_object(MINIO_BUCKET, file_record.filename)

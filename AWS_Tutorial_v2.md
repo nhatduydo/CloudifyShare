@@ -142,7 +142,7 @@ Kết quả mong muốn:
 # 5. Cấu hình MinIO (thay thế S3)
 Cài đặt MinIO trong private subnet (hoặc EC2 riêng).
 
-## hướng dẫn public - test
+## hướng dẫn private
 Tạo 1 instance mới:
 Có thể truy cập web http://<public-ip>:9001
 
@@ -154,37 +154,15 @@ Instance type	    t3.micro (hoặc t2.micro)
 Key pair	        Chọn key bạn đã có (ví dụ: cloudify.pem)
 
 ### BƯỚC 2: Cấu hình Network
-VPC: cloudifyshare-vpc
-Subnet:Chọn subnet public: cloudifyshare-subnet-public1-us-east-1
-Auto-assign public IP: Enable 
-  → Đây là điểm quan trọng nhất để instance có Public IP.
-
-### BƯỚC 3: Security Group
-Chọn Create new security group (hoặc chọn “Select existing” nếu đã có).
- Nếu tạo mới:
-  Tên: sg-minio-public
-  Type	    Protocol	        Port    range	      Source	      Mục đích
-  SSH	        TCP	             22	    0.0.0.0/0	  Cho phép      SSH
-  Custom      TCP	            TCP	    9000	      0.0.0.0/0	    API MinIO
-  Custom      TCP	            TCP	    9001	      0.0.0.0/0	    Giao diện MinIO
-
-### BƯỚC 4: User Data Script
- Advanced details →  User data → Dán script
-
-File .env của Flask:
-```
-MINIO_ENDPOINT=http://10.0.1.25:9000
-MINIO_ACCESS_KEY=admin
-MINIO_SECRET_KEY=Admin123!
-MINIO_BUCKET_NAME=cloudifyshare-main
-```
-Nếu có thêm MinIO backup ở AZ khác:
-```
-MINIO_BACKUP_ENDPOINT=http://10.0.2.25:9000
-```
+Tạo EC2 MinIO trong private subnet
+Launch EC2
+Subnet: cloudify-subnet-private1-us-east-1a
+Auto-assign Public IP: Disable
+SG: sg-minio
+Storage: 20–30 GB là đủ
+User data cài MinIO
 
 # 6. Tạo RDS MySQL (trong AWS Academy)
-
 ## tạo DB Subnet Group
 ### bước 1. Basic info
 RDS => Subnet groups → Create DB Subnet Group
@@ -213,7 +191,7 @@ Enable RDS Extended Support                         Không
 DB identifier	                                    cloudsharedb
 Master username	                                    admin
 Credentials management                              Self managed
-Password	                                        Admin123
+Password	                                        admin123
 Instance configuration                              Burstable classes
 Storage type                                        gp3
 
@@ -247,8 +225,8 @@ DB_NAME=cloudsharedb
 từ basiotn => ec2 flask 
 
 ### test kết nối 
-nc -zv cloudsharedb.cjzdt6vrob6s.us-east-1.rds.amazonaws.com 3306
-==> nếu thành công: Connection to cloudsharedb.cjzdt6vrob6s.us-east-1.rds.amazonaws.com 3306 port [tcp/mysql] succeeded!
+nc -zv cloudsharedb.c7qeeiky0vnm.us-east-1.rds.amazonaws.com 3306
+==> nếu thành công: Connection to cloudsharedb.c7qeeiky0vnm.us-east-1.rds.amazonaws.com 3306 port [tcp/mysql] succeeded!
 
 ## kết nối mysql
 Cài MySQL client
@@ -257,10 +235,10 @@ sudo apt update
 sudo apt install mysql-client -y
 ```
 ```
-mysql -h cloudsharedb.cjzdt6vrob6s.us-east-1.rds.amazonaws.com -u admin -p
+mysql -h cloudsharedb.c7qeeiky0vnm.us-east-1.rds.amazonaws.com -u admin -p
 ```
 
-Admin123
+admin123
 Nếu OK → sẽ thấy:   mysql>
 
 SHOW DATABASES;
@@ -405,10 +383,10 @@ Nếu thấy python3 run.py đang chạy → script hoạt động tốt
 
 # 8. Tạo Auto Scaling Group
 - EC2 → Auto Scaling Groups → Create
-- Name: asg-flask
-- Launch template: flask-template
-- Version: Latest
-- VPC: cloudify-vpc
+- Name:                         asg-flask
+- Launch template:              flask-template
+- Version:                      Latest
+- VPC:                          cloudify-vpc
 - Availability Zones and subnets: private1 và private2
 - Balanced best effort
 
@@ -416,12 +394,12 @@ Nếu thấy python3 run.py đang chạy → script hoạt động tốt
 - Select Load balancing options: Attach to an existing load balancer
 - chọn tg-flask
 
-- Load balancer type: Application Load Balancer (ALB) (HTTP, HTTPS)
-- Load balancer name: asg-flask-lb
-- Load balancer scheme: Internet-facing
-- Availability Zones and subnets: Chọn 2 public subnets
-- Listeners and routing: Protocol: HTTP - Port: 80
-- Default routing (target group): Create a target group
+- Load balancer type:                           Application Load Balancer (ALB) (HTTP, HTTPS)
+- Load balancer name:                           asg-flask-lb
+- Load balancer scheme:                         Internet-facing
+- Availability Zones and subnets:               Chọn 2 public subnets
+- Listeners and routing: Protocol:              HTTP - Port: 80
+- Default routing (target group):               Create a target group
 
 #### Health Checks:
 EC2 health checks: Enabled
@@ -429,12 +407,12 @@ ELB health checks: Enabled
 Health check grace period: 300 giây
 
 #### VPC Lattice integration options
-- Select VPC Lattice service to attach: No VPC Lattice service
-- Application Recovery Controller (ARC) zonal shift: không tick Health checks
-- EC2 health checks: Always enabled
-- Turn on Elastic Load Balancing health checks: Bật
-- Turn on Amazon EBS health checks: Không bật
-- Health check grace period: 300
+- Select VPC Lattice service to attach:                 No VPC Lattice service
+- Application Recovery Controller (ARC) zonal shift:    không tick Health checks
+- EC2 health checks:                                    Always enabled
+- Turn on Elastic Load Balancing health checks:         Bật
+- Turn on Amazon EBS health checks:                     Không bật
+- Health check grace period:                            300
 
 #### Tag (optional)
 Key: Project
@@ -448,11 +426,11 @@ Value: CloudifyShare
 - Metric type: Average CPU utilization
 - Target value: 60
 Instance maintenance policy
-- chọn: Launch before terminating
-- Capacity Reservation preference: Default
-- Enable instance scale-in protection: Không bật
-- Enable group metrics collection within CloudWatch: Bật
-- Enable default instance warmu:p Bật, 180 seconds
+- chọn:                                                     Launch before terminating
+- Capacity Reservation preference:                          Default
+- Enable instance scale-in protection:                      Không bật
+- Enable group metrics collection within CloudWatch:        Bật
+- Enable default instance warmu:p                           Bật, 180 seconds
 
 - Add tags: Project = CloudifyShare
 ==> Create Auto Scaling group
@@ -485,7 +463,8 @@ Security group	                  Chọn sg-lb (HTTP/HTTPS từ Internet)
 Listeners	                        HTTP port 80
 Routing action                    Forward to target groups
 ## Bước 2. Tạo Target Group
-Khi AWS hỏi "Target group" → chọn Create target group.
+Khi AWS hỏi "Target group" → chọn Create target group.==> 
+                tg-flask
 Mục	                Giá trị
 Target type	        Instances
 Protocol	          HTTP
@@ -541,7 +520,7 @@ Rồi nhấn Next.
 # 9. CloudWatch Monitoring 
 CloudWatch:
 Theo dõi CPU, RAM, Network của EC2 Flask App.
-Tạo alarm khi CPU > 70% để scale out, < 30% để scale in.
+Tạo alarm khi CPU > 60% để scale out, < 30% để scale in.
 AWS Backup:
 Tạo Backup Plan: cloudify-backup-plan
 Chọn tài nguyên: RDS, EC2
@@ -551,7 +530,7 @@ Retention: 30 days
 ## PHẦN 1 — Thiết lập CloudWatch Monitoring + Auto Scaling Alarms
 (để EC2 Flask App tự scale dựa trên CPU)
 Bạn đã có Auto Scaling Group (asg-flask), nên chỉ cần tạo 2 alarm:
-CPU > 70% → scale out
+CPU > 60% → scale out
 CPU < 30% → scale in
 ### BƯỚC 1 — Mở Auto Scaling Group
 EC2 → Auto Scaling Groups → asg-flask
