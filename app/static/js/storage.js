@@ -83,30 +83,22 @@ async function deleteFile(id) {
 
 async function downloadFile(id) {
   try {
-    // Gọi API với format=json để nhận download link
-    const res = await fetch(`${API_BASE}/download/${id}?format=json`, {
-      headers: { 
-        'Authorization': token,
-        'Accept': 'application/json'
-      }
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      showToast(data.error || 'Lỗi tải file', 'error')
-      return
-    }
-    
-    // Tạo link tải với timestamp để tránh cache
-    const downloadLink = data.download_link + (data.download_link.includes('?') ? '&' : '?') + '_t=' + Date.now()
-    
-    // Tạo thẻ a ẩn để trigger download
+    // Tạo link download với mode=attachment để ép buộc download
+    // Thêm timestamp để tránh browser cache
+    const downloadLink = `${API_BASE}/download/${id}?mode=attachment&_t=${Date.now()}`
+
+    // Tạo thẻ a ẩn để trigger download (ép buộc download file)
     const link = document.createElement('a')
     link.href = downloadLink
     link.download = '' // Ép buộc download
     link.style.display = 'none'
     document.body.appendChild(link)
     link.click()
-    document.body.removeChild(link)
+
+    // Xóa link sau một chút để đảm bảo download đã bắt đầu
+    setTimeout(() => {
+      document.body.removeChild(link)
+    }, 100)
   } catch (err) {
     showToast('Lỗi tải file: ' + err.message, 'error')
   }

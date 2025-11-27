@@ -144,110 +144,46 @@ def delete_file(file_id):
 
 
 @file.route("/download/<int:file_id>", methods=["GET"])
-@jwt_required(optional=True)
 def download_file(file_id):
+    """
+    Download file - không cần JWT token, luôn stream file trực tiếp
+
+    - Mặc định: mode=attachment (ép buộc download file)
+    - Khi có mode=inline: xem file trực tiếp trong browser (dùng cho link public)
+    """
     try:
         file_record = File.query.filter_by(id=file_id).first()
 
         if not file_record:
-            return jsonify({"error": "Không tìm thấy file hoặc bạn không có quyền tải"}), 404
+            return jsonify({"error": "Không tìm thấy file"}), 404
 
-        serializer = URLSafeTimedSerializer(
-            current_app.config["SECRET_KEY"],
-            salt=DOWNLOAD_TOKEN_SALT
+        # Lấy file từ MinIO
+        try:
+            file_obj = minio_client.get_object(MINIO_BUCKET, file_record.filename)
+            file_data = file_obj.read()
+            file_obj.close()
+            file_obj.release_conn()
+        except Exception as e:
+            return jsonify({"error": f"Không thể lấy file từ MinIO: {str(e)}"}), 500
+
+        # Xác định mode: inline (xem trực tiếp) hoặc attachment (ép buộc download)
+        # Mặc định là attachment để ép buộc download
+        mode_param = request.args.get("mode", "attachment")
+        disposition_mode = "inline" if mode_param == "inline" else "attachment"
+
+        # Tạo response với file data và cache control để tránh browser cache
+        response = Response(
+            file_data,
+            mimetype=file_record.file_type or 'application/octet-stream',
+            headers={
+                "Content-Disposition": f"{disposition_mode}; filename={quote(file_record.filename)}",
+                "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0",
+                "X-Content-Type-Options": "nosniff"
+            }
         )
-
-        # Lấy JWT identity một lần
-        current_username = get_jwt_identity()
-
-        # Kiểm tra nếu request có header Accept: application/json hoặc query param format=json
-        # Để phân biệt request từ API call vs browser direct access
-        wants_json = (
-            current_username is not None and
-            (request.headers.get("Accept", "").startswith("application/json") or
-             request.args.get("format") == "json")
-        )
-
-        # Kiểm tra quyền truy cập
-        if not file_record.is_public:
-            authorized = False
-
-            if current_username:
-                current_user = User.query.filter_by(username=current_username).first()
-
-                if not current_user:
-                    if wants_json:
-                        return jsonify({"error": "Không tìm thấy user"}), 404
-                    return jsonify({"error": "Unauthorized"}), 401
-
-                if file_record.upload_by != current_user.id:
-                    if wants_json:
-                        return jsonify({"error": "Không tìm thấy file hoặc bạn không có quyền tải"}), 404
-                    return jsonify({"error": "Unauthorized"}), 401
-
-                authorized = True
-            else:
-                # Cho phép truy cập nếu có token hợp lệ trong query
-                token_param = request.args.get("token")
-                if not token_param:
-                    if wants_json:
-                        return jsonify({"error": "Unauthorized"}), 401
-                    return jsonify({"error": "Unauthorized"}), 401
-
-                try:
-                    token_data = serializer.loads(token_param, max_age=DOWNLOAD_TOKEN_MAX_AGE)
-                except SignatureExpired:
-                    return jsonify({"error": "Link đã hết hạn"}), 401
-                except BadSignature:
-                    return jsonify({"error": "Token không hợp lệ"}), 401
-
-                if token_data.get("file_id") != file_id:
-                    return jsonify({"error": "Token không hợp lệ"}), 401
-
-                authorized = True
-
-            if not authorized:
-                return jsonify({"error": "Unauthorized"}), 401
-
-        # Nếu request từ API (có JWT và muốn JSON) thì trả về JSON link
-        if wants_json:
-            # Trả về JSON link cho frontend
-            if file_record.is_public:
-                download_link = f"{FRONTEND_BASE_URL}/files/download/{file_id}?mode=attachment"
-            else:
-                token_payload = {"file_id": file_id}
-                token = serializer.dumps(token_payload)
-                download_link = f"{FRONTEND_BASE_URL}/files/download/{file_id}?token={token}&mode=attachment"
-
-            return jsonify({
-                "message": "Tạo link tải thành công (hết hạn sau 7 ngày)",
-                "download_link": download_link
-            }), 200
-        else:
-            # Stream file trực tiếp cho browser (khi truy cập trực tiếp từ link)
-            try:
-                file_obj = minio_client.get_object(MINIO_BUCKET, file_record.filename)
-                file_data = file_obj.read()
-                file_obj.close()
-                file_obj.release_conn()
-            except Exception as e:
-                return jsonify({"error": f"Không thể lấy file từ MinIO: {str(e)}"}), 500
-
-            # Mặc định là attachment (ép buộc download), trừ khi có mode=inline
-            disposition_mode = "inline" if request.args.get("mode") == "inline" else "attachment"
-
-            # Tạo response với file data và cache control để tránh browser cache
-            response = Response(
-                file_data,
-                mimetype=file_record.file_type or 'application/octet-stream',
-                headers={
-                    "Content-Disposition": f"{disposition_mode}; filename={quote(file_record.filename)}",
-                    "Cache-Control": "no-cache, no-store, must-revalidate",
-                    "Pragma": "no-cache",
-                    "Expires": "0"
-                }
-            )
-            return response
+        return response
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -257,6 +193,10 @@ def download_file(file_id):
 @file.route("/make_public/<int:file_id>", methods=["PUT"])
 @jwt_required()
 def make_file_public(file_id):
+    """
+    Chia sẻ file công khai - tạo link để ai cũng có thể truy cập online
+    Link sẽ dùng mode=inline để xem file trực tiếp trong browser
+    """
     try:
         current_username = get_jwt_identity()
         current_user = User.query.execution_options(bind=reader_engine).filter_by(username=current_username).first()
@@ -272,7 +212,7 @@ def make_file_public(file_id):
         file_record.is_public = True
         db.session.commit()
 
-        # Tạo link công khai - ai cũng có thể truy cập online (mode=inline để xem trực tiếp)
+        # Tạo link công khai với mode=inline để ai cũng có thể xem file trực tiếp online
         public_url = f"{FRONTEND_BASE_URL}/files/download/{file_id}?mode=inline"
 
         return jsonify({
