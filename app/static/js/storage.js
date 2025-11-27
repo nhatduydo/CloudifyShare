@@ -82,11 +82,34 @@ async function deleteFile(id) {
 }
 
 async function downloadFile(id) {
-  const res = await fetch(`${API_BASE}/download/${id}`, {
-    headers: { 'Authorization': token }
-  })
-  const data = await res.json()
-  if (res.ok) window.open(data.download_link, '_blank')
+  try {
+    // Gọi API với format=json để nhận download link
+    const res = await fetch(`${API_BASE}/download/${id}?format=json`, {
+      headers: { 
+        'Authorization': token,
+        'Accept': 'application/json'
+      }
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      showToast(data.error || 'Lỗi tải file', 'error')
+      return
+    }
+    
+    // Tạo link tải với timestamp để tránh cache
+    const downloadLink = data.download_link + (data.download_link.includes('?') ? '&' : '?') + '_t=' + Date.now()
+    
+    // Tạo thẻ a ẩn để trigger download
+    const link = document.createElement('a')
+    link.href = downloadLink
+    link.download = '' // Ép buộc download
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  } catch (err) {
+    showToast('Lỗi tải file: ' + err.message, 'error')
+  }
 }
 
 // async function toggleShare(id, isPublic) {
