@@ -148,34 +148,27 @@ def delete_file(file_id):
 def download_file(file_id):
     try:
         file_record = File.query.filter_by(id=file_id).first()
-        
         if not file_record:
-            return jsonify({"error": "Không tìm thấy file hoặc bạn không có quyền tải"}), 404
+            return jsonify({"error": "Không tìm thấy file"}), 404
 
         serializer = URLSafeTimedSerializer(
             current_app.config["SECRET_KEY"],
             salt=DOWNLOAD_TOKEN_SALT
         )
 
-        # Lấy JWT identity một lần
+        # Lấy user từ JWT nếu có
         current_username = get_jwt_identity()
 
-        # Kiểm tra quyền truy cập
+        # KIỂM TRA QUYỀN
         if not file_record.is_public:
-            authorized = False
-
+            # Nếu có JWT
             if current_username:
                 current_user = User.query.filter_by(username=current_username).first()
-                
-                if not current_user:
-                    return jsonify({"error": "Không tìm thấy user"}), 404
+                if not current_user or current_user.id != file_record.upload_by:
+                    return jsonify({"error": "Không có quyền tải file này"}), 403
 
-                if file_record.upload_by != current_user.id:
-                    return jsonify({"error": "Không tìm thấy file hoặc bạn không có quyền tải"}), 404
-
-                authorized = True
+            # Nếu không có JWT → cần token
             else:
-                # Cho phép truy cập nếu có token hợp lệ trong query
                 token_param = request.args.get("token")
                 if not token_param:
                     return jsonify({"error": "Unauthorized"}), 401
@@ -190,51 +183,23 @@ def download_file(file_id):
                 if token_data.get("file_id") != file_id:
                     return jsonify({"error": "Token không hợp lệ"}), 401
 
-                authorized = True
+        # === LUÔN TẢI XUỐNG – LUÔN STREAM FILE ===
+        file_obj = minio_client.get_object(MINIO_BUCKET, file_record.filename)
+        file_data = file_obj.read()
+        file_obj.close()
+        file_obj.release_conn()
 
-            if not authorized:
-                return jsonify({"error": "Unauthorized"}), 401
-
-        # Kiểm tra nếu request từ frontend (có JWT token) thì trả về JSON link
-        # Nếu không có JWT (truy cập trực tiếp từ browser) thì stream file trực tiếp
-        wants_json = current_username is not None
-
-        if wants_json:
-            # Trả về JSON link cho frontend
-            if file_record.is_public:
-                download_link = f"{FRONTEND_BASE_URL}/files/download/{file_id}?mode=attachment"
-            else:
-                token_payload = {"file_id": file_id}
-                token = serializer.dumps(token_payload)
-                download_link = f"{FRONTEND_BASE_URL}/files/download/{file_id}?token={token}&mode=attachment"
-
-            return jsonify({
-                "message": "Tạo link tải thành công (hết hạn sau 7 ngày)",
-                "download_link": download_link
-            }), 200
-        else:
-            # Stream file trực tiếp cho browser (khi truy cập public link)
-            try:
-                file_obj = minio_client.get_object(MINIO_BUCKET, file_record.filename)
-                file_data = file_obj.read()
-                file_obj.close()
-                file_obj.release_conn()
-            except Exception as e:
-                return jsonify({"error": f"Không thể lấy file từ MinIO: {str(e)}"}), 500
-
-            disposition_mode = "inline" if request.args.get("mode") == "inline" else "attachment"
-
-            # Tạo response với file data
-            return Response(
-                file_data,
-                mimetype=file_record.file_type or 'application/octet-stream',
-                headers={
-                    "Content-Disposition": f"{disposition_mode}; filename={quote(file_record.filename)}"
-                }
-            )
+        return Response(
+            file_data,
+            mimetype=file_record.file_type or 'application/octet-stream',
+            headers={
+                "Content-Disposition": f"attachment; filename={quote(file_record.filename)}"
+            }
+        )
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 # Chia sẻ file (public)
