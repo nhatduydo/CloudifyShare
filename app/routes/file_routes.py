@@ -141,65 +141,79 @@ def delete_file(file_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
-
-
+    
+    
 @file.route("/download/<int:file_id>", methods=["GET"])
 @jwt_required(optional=True)
 def download_file(file_id):
     try:
         file_record = File.query.filter_by(id=file_id).first()
         if not file_record:
-            return jsonify({"error": "Không tìm thấy file"}), 404
+            return jsonify({"error": "Không tìm thấy file hoặc bạn không có quyền tải"}), 404
 
         serializer = URLSafeTimedSerializer(
             current_app.config["SECRET_KEY"],
             salt=DOWNLOAD_TOKEN_SALT
         )
 
-        # Lấy user từ JWT nếu có
         current_username = get_jwt_identity()
 
-        # KIỂM TRA QUYỀN
+        # ====== CHECK QUYỀN TRUY CẬP ======
         if not file_record.is_public:
             # Nếu có JWT
             if current_username:
                 current_user = User.query.filter_by(username=current_username).first()
                 if not current_user or current_user.id != file_record.upload_by:
                     return jsonify({"error": "Không có quyền tải file này"}), 403
-
-            # Nếu không có JWT → cần token
             else:
+                # Không JWT → phải có token
                 token_param = request.args.get("token")
                 if not token_param:
                     return jsonify({"error": "Unauthorized"}), 401
 
                 try:
                     token_data = serializer.loads(token_param, max_age=DOWNLOAD_TOKEN_MAX_AGE)
+                    if token_data.get("file_id") != file_id:
+                        return jsonify({"error": "Token không hợp lệ"}), 401
                 except SignatureExpired:
                     return jsonify({"error": "Link đã hết hạn"}), 401
                 except BadSignature:
                     return jsonify({"error": "Token không hợp lệ"}), 401
 
-                if token_data.get("file_id") != file_id:
-                    return jsonify({"error": "Token không hợp lệ"}), 401
+        # ====== API MODE (frontend) → TRẢ JSON ======
+        if request.headers.get("Authorization"):
+            if file_record.is_public:
+                download_link = f"{FRONTEND_BASE_URL}/files/download/{file_id}?mode=attachment"
+            else:
+                token = serializer.dumps({"file_id": file_id})
+                download_link = f"{FRONTEND_BASE_URL}/files/download/{file_id}?token={token}&mode=attachment"
 
-        # === LUÔN TẢI XUỐNG – LUÔN STREAM FILE ===
-        file_obj = minio_client.get_object(MINIO_BUCKET, file_record.filename)
-        file_data = file_obj.read()
-        file_obj.close()
-        file_obj.release_conn()
+            return jsonify({
+                "message": "Tạo link tải thành công",
+                "download_link": download_link
+            }), 200
+
+        # ====== BROWSER MODE → STREAM FILE (ép tải xuống) ======
+        try:
+            file_obj = minio_client.get_object(MINIO_BUCKET, file_record.filename)
+            file_data = file_obj.read()
+            file_obj.close()
+            file_obj.release_conn()
+        except Exception as e:
+            return jsonify({"error": f"Không thể lấy file từ MinIO: {str(e)}"}), 500
+
+        disposition_mode = "inline" if request.args.get("mode") == "inline" else "attachment"
 
         return Response(
             file_data,
-            mimetype=file_record.file_type or 'application/octet-stream',
+            mimetype=file_record.file_type or "application/octet-stream",
             headers={
-                "Content-Disposition": f"attachment; filename={quote(file_record.filename)}"
+                "Content-Disposition": f"{disposition_mode}; filename={quote(file_record.filename)}"
             }
         )
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 
 # Chia sẻ file (public)
