@@ -42,7 +42,7 @@ if not minio_client.bucket_exists(MINIO_BUCKET):
 def _build_download_url(file_id: int, mode: str) -> str:
     base = FRONTEND_BASE_URL or ""
     prefix = base or ""
-    return f"{prefix}/messages/files/{file_id}/download?mode={mode}"
+    return f"{prefix}/files/download/{file_id}?mode={mode}"
 
 # api gửi tin nhắn
 
@@ -218,6 +218,7 @@ def download_message_file(file_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 # api lấy lịch sử chat
 
