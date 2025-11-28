@@ -116,6 +116,7 @@ def list_files():
         "url": f.file_url,
         "type": f.file_type,
         "size": f.file_size,
+        "is_public": f.is_public,
         "created_at": f.created_at.strftime("%Y-%m-%d %H:%M:%S")
     } for f in files]
 
@@ -149,6 +150,10 @@ def download_file(file_id):
     if not file_record:
         return jsonify({"error": "Không tìm thấy file"}), 404
 
+    # Link công khai chỉ hoạt động khi file đang ở trạng thái public
+    if not file_record.is_public:
+        return jsonify({"error": "File đã được đặt ở chế độ riêng tư"}), 403
+    
     try:
         response = minio_client.get_object(MINIO_BUCKET, file_record.filename)
 
@@ -169,7 +174,6 @@ def download_file(file_id):
         )
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 
 # Chia sẻ file (public)
