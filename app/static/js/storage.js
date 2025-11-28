@@ -23,12 +23,11 @@ async function loadFiles() {
         ? `<span class="text-green-600">Công khai</span>`
         : `<span class="text-gray-500">Riêng tư</span>`
 
-      const encodedName = encodeURIComponent(f.filename)
       const actions = `
         <button onclick="toggleShare(${f.id}, ${f.is_public})" class="text-sm text-blue-600 hover:underline">
           ${f.is_public ? 'Tắt chia sẻ' : 'Chia sẻ'}
         </button>
-        <button onclick="downloadFile(${f.id}, '${encodedName}')" class="text-sm text-indigo-600 hover:underline">Tải xuống</button>
+        <button onclick="downloadFile(${f.id})" class="text-sm text-indigo-600 hover:underline">Tải xuống</button>
         <button onclick="deleteFile(${f.id})" class="text-sm text-red-600 hover:underline">Xóa</button>
       `
 
@@ -82,18 +81,21 @@ async function deleteFile(id) {
   loadFiles()
 }
 
-async function downloadFile(id, encodedName = '') {
+async function downloadFile(id) {
   try {
-    const downloadLink = `${API_BASE}/download/${id}?mode=attachment&_t=${Date.now()}`
-    const filename = encodedName ? decodeURIComponent(encodedName) : ''
+    // Tạo link download với mode=attachment để ép buộc download
+    // Thêm timestamp để tránh browser cache
+    const downloadLink = `${FRONTEND_BASE_URL}/files/download/${id}?mode=attachment&_t=${Date.now()}`
 
+    // Tạo thẻ a ẩn để trigger download (ép buộc download file)
     const link = document.createElement('a')
     link.href = downloadLink
-    link.download = filename || undefined // Giữ nguyên tên và định dạng gốc
+    link.download = '' // Ép buộc download
     link.style.display = 'none'
     document.body.appendChild(link)
     link.click()
 
+    // Xóa link sau một chút để đảm bảo download đã bắt đầu
     setTimeout(() => {
       document.body.removeChild(link)
     }, 100)
@@ -102,6 +104,17 @@ async function downloadFile(id, encodedName = '') {
   }
 }
 
+// async function toggleShare(id, isPublic) {
+//   const endpoint = isPublic ? 'make_private' : 'make_public'
+//   const res = await fetch(`${API_BASE}/${endpoint}/${id}`, {
+//     method: 'PUT',
+//     headers: { 'Authorization': token }
+//   })
+//   const data = await res.json()
+//   console.log('Toggle response:', data)
+//   showToast(data.message || data.error, 'error')
+//   loadFiles()
+// }
 
 function addPublicLinkRow(row, url) {
   removePublicLinkRow(row)

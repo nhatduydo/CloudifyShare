@@ -9,7 +9,6 @@ import io
 from datetime import timedelta
 import json
 from flask import send_file
-import mimetypes
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from app import reader_engine
 
@@ -146,55 +145,31 @@ def delete_file(file_id):
 
 @file.route("/download/<int:file_id>", methods=["GET"])
 def download_file(file_id):
+    file_record = File.query.filter_by(id=file_id).first()
+    if not file_record:
+        return jsonify({"error": "Không tìm thấy file"}), 404
+
     try:
-        file_record = File.query.filter_by(id=file_id).first()
+        response = minio_client.get_object(MINIO_BUCKET, file_record.filename)
 
-        if not file_record:
-            return jsonify({"error": "Không tìm thấy file"}), 404
-
-        # Link công khai chỉ hoạt động khi file đang ở trạng thái public
-        if not file_record.is_public:
-            return jsonify({"error": "File đã được đặt ở chế độ riêng tư"}), 403
-
-        # Lấy file từ MinIO
-        try:
-            file_obj = minio_client.get_object(MINIO_BUCKET, file_record.filename)
-            file_data = file_obj.read()
-            file_obj.close()
-            file_obj.release_conn()
-        except Exception as e:
-            return jsonify({"error": f"Không thể lấy file từ MinIO: {str(e)}"}), 500
-
-        # Xác định mode: inline (xem trực tiếp) hoặc attachment (ép buộc download).
-        # Flask send_file sẽ tự set Content-Disposition phù hợp khi có download_name.
+        # ép download hoặc xem inline
         mode_param = request.args.get("mode", "attachment")
-        as_attachment = mode_param != "inline"
+        disposition_mode = "inline" if mode_param == "inline" else "attachment"
 
-        file_stream = io.BytesIO(file_data)
-        file_stream.seek(0)
-
-        guessed_mime, _ = mimetypes.guess_type(file_record.filename)
-        mime_type = guessed_mime or file_record.file_type or "application/octet-stream"
-
-        response = send_file(
-            file_stream,
-            mimetype=mime_type,
-            as_attachment=as_attachment,
-            download_name=file_record.filename,
-            max_age=0
+        return Response(
+            response,
+            mimetype=file_record.file_type,
+            headers={
+                "Content-Disposition": f"{disposition_mode}; filename={quote(file_record.filename)}",
+                "Content-Length": response.getheader("Content-Length"),
+                "Cache-Control": "no-cache, no-store",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
         )
-
-        # Bắt browser bỏ cache để tránh giữ định dạng sai
-        response.headers.update({
-            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
-            "Pragma": "no-cache",
-            "Expires": "0",
-            "X-Content-Type-Options": "nosniff"
-        })
-        return response
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 # Chia sẻ file (public)
