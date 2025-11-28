@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, Response, current_app
-from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import db, User, File
 from dotenv import load_dotenv
 from minio import Minio
@@ -151,19 +151,12 @@ def download_file(file_id):
         return jsonify({"error": "Không tìm thấy file"}), 404
 
     # Link công khai chỉ hoạt động khi file đang ở trạng thái public
-    # File private → chỉ cho phép chủ sở hữu tải
-    if not file_record.is_public:
-        try:
-            verify_jwt_in_request(optional=False)
-            current_user = get_jwt_identity()
-            owner = User.query.filter_by(id=file_record.upload_by).first()
+    mode_param = request.args.get("mode", "attachment")
+    disposition_mode = "inline" if mode_param == "inline" else "attachment"
 
-            # Nếu không phải chủ sở hữu → chặn
-            if not owner or owner.username != current_user:
-                return jsonify({"error": "Bạn không có quyền truy cập file này"}), 403
-
-        except Exception:
-            return jsonify({"error": "File đã được đặt ở chế độ riêng tư"}), 403
+    # Nếu file đang private → cấm xem inline
+    if not file_record.is_public and disposition_mode == "inline":
+        return jsonify({"error": "File này đang ở chế độ riêng tư. Không thể xem trực tiếp."}), 403
     
     try:
         response = minio_client.get_object(MINIO_BUCKET, file_record.filename)
