@@ -164,23 +164,29 @@ def download_file(file_id):
         except Exception as e:
             return jsonify({"error": f"Không thể lấy file từ MinIO: {str(e)}"}), 500
 
-        # Xác định mode: inline (xem trực tiếp) hoặc attachment (ép buộc download)
-        # Mặc định là attachment để ép buộc download
+        # Xác định mode: inline (xem trực tiếp) hoặc attachment (ép buộc download).
+        # Flask send_file sẽ tự set Content-Disposition phù hợp khi có download_name.
         mode_param = request.args.get("mode", "attachment")
-        disposition_mode = "inline" if mode_param == "inline" else "attachment"
+        as_attachment = mode_param != "inline"
 
-        # Tạo response với file data và cache control để tránh browser cache
-        response = Response(
-            file_data,
-            mimetype=file_record.file_type or 'application/octet-stream',
-            headers={
-                "Content-Disposition": f"{disposition_mode}; filename={quote(file_record.filename)}",
-                "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
-                "Pragma": "no-cache",
-                "Expires": "0",
-                "X-Content-Type-Options": "nosniff"
-            }
+        file_stream = io.BytesIO(file_data)
+        file_stream.seek(0)
+
+        response = send_file(
+            file_stream,
+            mimetype=file_record.file_type or "application/octet-stream",
+            as_attachment=as_attachment,
+            download_name=file_record.filename,
+            max_age=0
         )
+
+        # Bắt browser bỏ cache để tránh giữ định dạng sai
+        response.headers.update({
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "X-Content-Type-Options": "nosniff"
+        })
         return response
 
     except Exception as e:
