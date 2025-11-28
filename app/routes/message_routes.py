@@ -98,14 +98,14 @@ def send_message():
                 file_size=file_size,
                 file_type=content_type,
                 upload_by=sender.id,
-                is_public=False
+                is_public=True
             )
             db.session.add(file_obj)
             db.session.flush()
 
             mode = "inline" if message_type_enum == MessageType.IMAGE else "attachment"
             file_obj.file_url = _build_download_url(file_obj.id, mode)
-
+            db.session.commit()
         new_msg = Message(
             sender_id=sender.id,
             receiver_id=receiver_id,

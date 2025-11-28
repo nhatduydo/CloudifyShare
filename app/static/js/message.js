@@ -105,7 +105,7 @@ function renderMessage(msg, isSender = false) {
     img.className = 'max-w-[150px] rounded-lg';
     bubble.appendChild(img);
   } else {
-    bubble.textContent = msg.content || '(Không có nội dung)';
+    bubble.textContent = msg.content || 'Nội dung không còn tồn tại';
   }
 
   div.appendChild(bubble);
