@@ -85,7 +85,7 @@ async function downloadFile(id) {
   try {
     // Tạo link download với mode=attachment để ép buộc download
     // Thêm timestamp để tránh browser cache
-    const downloadLink = `${FRONTEND_BASE_URL}/files/download/${id}?mode=attachment&_t=${Date.now()}`
+    const downloadLink = `${window.location.origin}/files/download/${id}?mode=attachment&_t=${Date.now()}`
 
     // Tạo thẻ a ẩn để trigger download (ép buộc download file)
     const link = document.createElement('a')
