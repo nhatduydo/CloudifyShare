@@ -161,9 +161,9 @@ def download_file(file_id):
     try:
         response = minio_client.get_object(MINIO_BUCKET, file_record.filename)
 
-        # ép download hoặc xem inline
-        mode_param = request.args.get("mode", "attachment")
-        disposition_mode = "inline" if mode_param == "inline" else "attachment"
+        # # ép download hoặc xem inline
+        # mode_param = request.args.get("mode", "attachment")
+        # disposition_mode = "inline" if mode_param == "inline" else "attachment"
 
         return Response(
             response,
