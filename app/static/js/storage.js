@@ -23,11 +23,12 @@ async function loadFiles() {
         ? `<span class="text-green-600">Công khai</span>`
         : `<span class="text-gray-500">Riêng tư</span>`
 
+      const encodedName = encodeURIComponent(f.filename)
       const actions = `
         <button onclick="toggleShare(${f.id}, ${f.is_public})" class="text-sm text-blue-600 hover:underline">
           ${f.is_public ? 'Tắt chia sẻ' : 'Chia sẻ'}
         </button>
-        <button onclick="downloadFile(${f.id})" class="text-sm text-indigo-600 hover:underline">Tải xuống</button>
+        <button onclick="downloadFile(${f.id}, '${encodedName}')" class="text-sm text-indigo-600 hover:underline">Tải xuống</button>
         <button onclick="deleteFile(${f.id})" class="text-sm text-red-600 hover:underline">Xóa</button>
       `
 
@@ -81,13 +82,14 @@ async function deleteFile(id) {
   loadFiles()
 }
 
-async function downloadFile(id) {
+async function downloadFile(id, encodedName = '') {
   try {
     const downloadLink = `${API_BASE}/download/${id}?mode=attachment&_t=${Date.now()}`
+    const filename = encodedName ? decodeURIComponent(encodedName) : ''
 
     const link = document.createElement('a')
     link.href = downloadLink
-    link.download = '' // Ép buộc download
+    link.download = filename || undefined // Giữ nguyên tên và định dạng gốc
     link.style.display = 'none'
     document.body.appendChild(link)
     link.click()

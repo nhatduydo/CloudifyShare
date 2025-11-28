@@ -9,6 +9,7 @@ import io
 from datetime import timedelta
 import json
 from flask import send_file
+import mimetypes
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from app import reader_engine
 
@@ -172,9 +173,12 @@ def download_file(file_id):
         file_stream = io.BytesIO(file_data)
         file_stream.seek(0)
 
+        guessed_mime, _ = mimetypes.guess_type(file_record.filename)
+        mime_type = guessed_mime or file_record.file_type or "application/octet-stream"
+
         response = send_file(
             file_stream,
-            mimetype=file_record.file_type or "application/octet-stream",
+            mimetype=mime_type,
             as_attachment=as_attachment,
             download_name=file_record.filename,
             max_age=0
